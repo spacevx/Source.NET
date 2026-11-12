@@ -2,6 +2,7 @@
 
 using SDL;
 
+using Source.Common.Commands;
 using Source.Common.GUI;
 using Source.Common.Launcher;
 using Source.Common.MaterialSystem;
@@ -416,7 +417,21 @@ public unsafe class SDL3_LauncherManager : ILauncherManager, IGraphicsProvider
 	}
 
 	public void SetWindowRelativeMouseMode(bool cursorLocked) {
-		SDL3.SDL_SetWindowRelativeMouseMode(window.HardwareHandle, cursorLocked);
+		ConVarRef rawinput = new("m_rawinput");
+		window.RawInput = cursorLocked && rawinput.IsValid() && rawinput.GetBool();
+
+		bool windowGrab = cursorLocked;
+		bool relativeMouseMode = windowGrab;
+
+		if (!window.RawInput) {
+			if (window.ForbidMouseGrab)
+				windowGrab = false;
+
+			relativeMouseMode = false;
+		}
+
+		SDL3.SDL_SetWindowMouseGrab(window.HardwareHandle, windowGrab);
+		SDL3.SDL_SetWindowRelativeMouseMode(window.HardwareHandle, relativeMouseMode);
 	}
 
 	public void FlashWindow(bool state) {

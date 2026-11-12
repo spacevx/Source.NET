@@ -374,10 +374,38 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 	}
 
 	private void Init_Mouse() {
+		if (commandLine.CheckParm("-nomouse"))
+			return;
+
 		PreviousMouseXPosition = 0.0f;
 		PreviousMouseYPosition = 0.0f;
 
 		MouseInitialized = true;
+
+		MouseParmsValid = false;
+
+		if (commandLine.CheckParm("-useforcedmparms")) {
+#if WIN32
+			MouseParmsValid = SystemParametersInfo(SPI_GETMOUSE, 0, OrigMouseParms, 0);
+#else
+			MouseParmsValid = false;
+#endif
+			if (MouseParmsValid) {
+				if (commandLine.CheckParm("-noforcemspd"))
+					NewMouseParms[MOUSE_SPEED_FACTOR] = OrigMouseParms[MOUSE_SPEED_FACTOR];
+				else
+					CheckMouseParam[MOUSE_SPEED_FACTOR] = true;
+
+				if (commandLine.CheckParm("-noforcemaccel")) {
+					NewMouseParms[MOUSE_ACCEL_THRESHHOLD1] = OrigMouseParms[MOUSE_ACCEL_THRESHHOLD1];
+					NewMouseParms[MOUSE_ACCEL_THRESHHOLD2] = OrigMouseParms[MOUSE_ACCEL_THRESHHOLD2];
+				}
+				else {
+					CheckMouseParam[MOUSE_ACCEL_THRESHHOLD1] = true;
+					CheckMouseParam[MOUSE_ACCEL_THRESHHOLD2] = true;
+				}
+			}
+		}
 	}
 
 	private void Init_Keyboard() {
@@ -529,6 +557,9 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 	private void MouseMove(ref UserCmd cmd) {
 		engine.GetViewAngles(out QAngle viewangles);
 		QAngle originalViewangles = viewangles;
+
+		CheckMouseAcclerationVars();
+
 		view.StopPitchDrift();
 
 		if (!CameraInterceptingMouse && !Surface.IsCursorVisible()) {
@@ -658,7 +689,12 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 		mx = AccumulatedMouseXMovement;
 		my = AccumulatedMouseYMovement;
 
-		// todo: raw input?
+		if (m_rawinput.GetBool()) {
+			if (inputsystem.GetRawMouseAccumulators(out int rawMouseX, out int rawMouseY)) {
+				mx = rawMouseX;
+				my = rawMouseY;
+			}
+		}
 
 		AccumulatedMouseXMovement = 0;
 		AccumulatedMouseYMovement = 0;
@@ -671,23 +707,35 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 		if (!cl_mouselook.GetBool())
 			return;
 
+		if (m_rawinput.GetBool())
+			return;
+
 		engine.GetScreenSize(out int w, out int h);
 
 		if (!CameraInterceptingMouse && Surface.IsCursorLocked()) {
+#if WIN32
+			GetMousePos(out int current_posx, out int current_posy);
+
+			int x = w >> 1;
+			int y = h >> 1;
+
+			AccumulatedMouseXMovement += current_posx - x;
+			AccumulatedMouseYMovement += current_posy - y;
+#else
 			engine.GetMouseDelta(out int dx, out int dy);
 			AccumulatedMouseXMovement += dx;
 			AccumulatedMouseYMovement += dy;
+#endif
 
 			ResetMouse();
 		}
 		else if (MouseActive) {
 			GetMousePos(out int ox, out int oy);
 
-			int new_ox = Math.Clamp(ox, 0, w - 1);
-			int new_oy = Math.Clamp(oy, 0, h - 1);
+			ox = Math.Clamp(ox, 0, w - 1);
+			oy = Math.Clamp(oy, 0, h - 1);
 
-			if (ox != new_ox || oy != new_oy)
-				SetMousePos(new_ox, new_oy);
+			SetMousePos(ox, oy);
 		}
 	}
 

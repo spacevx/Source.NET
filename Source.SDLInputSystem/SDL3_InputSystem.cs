@@ -7,6 +7,8 @@ using Source;
 using Source.Common.Input;
 using Source.Common.Launcher;
 
+using System.Runtime.InteropServices;
+
 namespace Nucleus.SDL3Window;
 
 public class InputState
@@ -95,7 +97,14 @@ public class SDL3_InputSystem(IServiceProvider services) : IInputSystem
 	}
 
 	public bool GetRawMouseAccumulators(out int accumX, out int accumY) {
-		throw new NotImplementedException();
+		if (launcherMgr != null) {
+			launcherMgr.GetMouseDelta(out accumX, out accumY, false);
+			return true;
+		}
+
+		accumX = 0;
+		accumY = 0;
+		return false;
 	}
 
 	public bool IsButtonDown(ButtonCode code) {
@@ -512,8 +521,34 @@ public class SDL3_InputSystem(IServiceProvider services) : IInputSystem
 		throw new NotImplementedException();
 	}
 
+#if WIN32
+	[StructLayout(LayoutKind.Sequential)]
+	struct POINT
+	{
+		public int X;
+		public int Y;
+	}
+
+	[DllImport("user32.dll")] static extern bool GetCursorPos(out POINT point);
+	[DllImport("user32.dll")] static extern bool ScreenToClient(nint hwnd, ref POINT point);
+#endif
+
 	public unsafe void GetCursorPosition(out int x, out int y) {
 		float fx, fy;
+#if WIN32
+		if (Window != null) {
+			SDL_PropertiesID props = SDL3.SDL_GetWindowProperties((SDL_Window*)Window.GetHandle());
+			nint hwnd;
+			fixed (byte* name = SDL3.SDL_PROP_WINDOW_WIN32_HWND_POINTER)
+				hwnd = SDL3.SDL_GetPointerProperty(props, name, IntPtr.Zero);
+
+			if (hwnd != 0 && GetCursorPos(out POINT point) && ScreenToClient(hwnd, ref point)) {
+				x = point.X;
+				y = point.Y;
+				return;
+			}
+		}
+#endif
 		SDL3.SDL_GetMouseState(&fx, &fy);
 		x = (int)fx;
 		y = (int)fy;
