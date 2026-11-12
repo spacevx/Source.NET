@@ -14394,7 +14394,7 @@ This is a list of every entity classname that Garry's Mod's server (`server_srv.
   - Methods
     - [x] `Activate`
     - [ ] `ActivityList`
-    - [ ] `ActivityListCount`
+    - [x] `ActivityListCount` <!-- manual -->
     - [x] `CanBePickedUpByNPCs`
     - [x] `CreatePhysBeam`
     - [x] `Deploy`
