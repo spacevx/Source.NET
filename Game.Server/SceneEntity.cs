@@ -541,7 +541,7 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 		DEFINE.INPUTFUNC(FieldType.Float, "PitchShift", nameof(InputPitchShiftPlayback), (INPUTFUNCPTR)((self, data) => ((SceneEntity)self).InputPitchShiftPlayback(data))),
 		DEFINE.INPUTFUNC(FieldType.Void, "StopWaitingForActor", nameof(InputStopWaitingForActor), (INPUTFUNCPTR)((self, data) => ((SceneEntity)self).InputStopWaitingForActor(data))),
 		DEFINE.INPUTFUNC(FieldType.Integer, "Trigger", nameof(InputTriggerEvent), (INPUTFUNCPTR)((self, data) => ((SceneEntity)self).InputTriggerEvent(data))),
-		// TODO: InterjectResponse input, it needs the response system (CAI_BaseActor::SpeakFindResponse/SpeakDispatchResponse) ported first
+		// todo: InterjectResponse input, it needs the response system (CAI_BaseActor::SpeakFindResponse/SpeakDispatchResponse) ported first
 #if GMOD_DLL
 		DEFINE.INPUTFUNC(FieldType.String, "SetTarget1", nameof(InputSetTarget1), (INPUTFUNCPTR)((self, data) => ((SceneEntity)self).InputSetTarget1(data))),
 		DEFINE.INPUTFUNC(FieldType.String, "SetTarget2", nameof(InputSetTarget2), (INPUTFUNCPTR)((self, data) => ((SceneEntity)self).InputSetTarget2(data))),
@@ -776,7 +776,7 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 					break;
 				case EventType.Speak:
 					PrecacheScriptSound(ev.GetParameters());
-					// TODO: precache the close caption token sound of CC_MASTER events with slaves once ChoreoEvent has close captions
+					// todo: precache the close caption token sound of CC_MASTER events with slaves once ChoreoEvent has close captions
 					break;
 				case EventType.SubScene:
 					if (!scene.IsSubScene()) {
@@ -1487,7 +1487,7 @@ public partial class SceneEntity : PointEntity, IChoreoEventCallback
 			if (!stristr(ResumeSceneFile, ".vcd").IsEmpty)
 				startedScene = InstancedScriptedScene(null, ResumeSceneFile, ref WaitingForThisResumeScene, 0, false) != 0;
 
-			// TODO: if no scene started, find a response for the first actor (CAI_BaseActor::SpeakFindResponse) and play it, once the response system is ported
+			// todo: if no scene started, find a response for the first actor (CAI_BaseActor::SpeakFindResponse) and play it, once the response system is ported
 
 			if (startedScene)
 				WaitingForResumeScene = true;

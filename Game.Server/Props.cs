@@ -59,7 +59,7 @@ public class BaseProp : BaseAnimating
 [NetworkName("CBreakableProp")]
 public partial class BreakableProp : BaseProp, IBreakableWithPropData, IPlayerPickupVPhysics
 {
-	// TODO: SetHealth/AddHealth/RemoveHealth inputs, they need UpdateHealth, OnHealthChanged and Break ported first
+	// todo: SetHealth/AddHealth/RemoveHealth inputs, they need UpdateHealth, OnHealthChanged and Break ported first
 	[NetworkTable]
 	public static readonly new NetworkProp[] Props = [
 	];
