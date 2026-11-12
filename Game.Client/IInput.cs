@@ -15,6 +15,7 @@ public interface IInput
 	public void DecodeUserCmdFromBuffer(bf_read buf, int slot);
 	public void MakeWeaponSelection(BaseCombatWeapon? weapon);
 	void Init();
+	void Shutdown_All();
 	float KeyState(ref KeyButtonState key);
 	int KeyEvent(int eventcode, ButtonCode keynum, ReadOnlySpan<char> currentBinding);
 	void ExtraMouseSample(double frametime, bool active);

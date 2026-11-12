@@ -204,6 +204,8 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 
 	public void Shutdown() {
 		ClientVoiceMgr_Shutdown();
+
+		input.Shutdown_All();
 #if GMOD_DLL
 		Game.Client.GarrysMod.GarrysMod.Lua.Kill();
 		get.MenuSystem()?.Shutdown();

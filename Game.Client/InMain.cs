@@ -408,6 +408,15 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 		}
 	}
 
+	public void Shutdown_All() {
+		DeactivateMouse();
+		Shutdown_Keyboard();
+	}
+
+	private void Shutdown_Keyboard() {
+
+	}
+
 	private void Init_Keyboard() {
 
 	}
