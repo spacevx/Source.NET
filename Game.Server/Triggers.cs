@@ -167,12 +167,16 @@ public partial class BaseTrigger : BaseToggle
 	//			turn off this trigger
 	//------------------------------------------------------------------------------
 	public virtual void InputDisableAndEndTouch(InputData inputdata) {
-		for (int i = TouchingEntities.Count - 1; i >= 0; i--) {
-			BaseEntity? touching = (BaseEntity?)TouchingEntities[i].Get();
+		EndTouchOnAllTouchers();
+	}
+
+	public void EndTouchOnAllTouchers() {
+		while (TouchingEntities.Count > 0) {
+			BaseEntity? touching = (BaseEntity?)TouchingEntities[^1].Get();
 			if (touching != null)
 				EndTouch(touching);
 			else
-				TouchingEntities.RemoveAt(i);
+				TouchingEntities.RemoveAt(TouchingEntities.Count - 1);
 		}
 
 		Disable();
@@ -600,6 +604,15 @@ public class TriggerHurt : BaseTrigger
 	public override void UpdateOnRemove() {
 		AutoList.Remove(this);
 		base.UpdateOnRemove();
+	}
+
+	public override bool KeyValue(ReadOnlySpan<char> keyName, ReadOnlySpan<char> value) {
+		if (FStrEq(keyName, "damagetype")) {
+			BitsDamageInflict = atoi(value);
+			return true;
+		}
+
+		return base.KeyValue(keyName, value);
 	}
 
 	//-----------------------------------------------------------------------------

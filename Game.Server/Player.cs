@@ -696,6 +696,14 @@ public partial class BasePlayer : BaseCombatCharacter
 		AfButtonForced &= ~buttons;
 	}
 
+	public void DisableButtons(InButtons buttons) {
+		AfButtonDisabled |= buttons;
+	}
+
+	public void EnableButtons(InButtons buttons) {
+		AfButtonDisabled &= ~buttons;
+	}
+
 	public bool GamePaused;
 
 	public virtual void EquipSuit(bool playEffects = false) {
