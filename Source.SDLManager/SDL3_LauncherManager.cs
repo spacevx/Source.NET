@@ -155,6 +155,8 @@ public unsafe class SDL3_LauncherManager : ILauncherManager, IGraphicsProvider
 
 		CenterWindow(windowRect.Right - windowRect.Left, windowRect.Bottom - windowRect.Top);
 
+		UpdateMouseWarpTargets(width, height);
+
 		return true;
 	}
 
@@ -259,7 +261,10 @@ public unsafe class SDL3_LauncherManager : ILauncherManager, IGraphicsProvider
 		SDL3.SDL_SetWindowBordered(window.HardwareHandle, bordered);
 	}
 
-	public void SizeWindow(int width, int tall) => SDL3.SDL_SetWindowSize(window.HardwareHandle, width, tall);
+	public void SizeWindow(int width, int tall) {
+		UpdateMouseWarpTargets(width, tall);
+		SDL3.SDL_SetWindowSize(window.HardwareHandle, width, tall);
+	}
 
 	public int GetDisplayModeCount(int displayIndex) {
 		int count = 0;
@@ -406,7 +411,14 @@ public unsafe class SDL3_LauncherManager : ILauncherManager, IGraphicsProvider
 		currentlySetCursor?.Activate();
 	}
 
+	private void UpdateMouseWarpTargets(int width, int height) {
+		window.MouseTargetX = width / 2;
+		window.MouseTargetY = height / 2;
+		window.WarpDelta = Math.Max(height / 3, 200);
+	}
+
 	public void SetMouseVisible(bool state) {
+		window.CursorVisible = state;
 		if (state) {
 			SDL3.SDL_ShowCursor();
 			lastCursor?.Activate();

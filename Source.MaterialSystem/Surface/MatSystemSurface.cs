@@ -1420,6 +1420,9 @@ public class MatSystemSurface : IMatSystemSurface
 
 	public void SetCursor(CursorCode cursor) => SetCursor((HCursor)cursor);
 	public void SetCursor(HCursor cursor) {
+		if (IsCursorLocked())
+			return;
+
 		if (CurrentHCursor != cursor) {
 			CurrentHCursor = cursor;
 			CursorSelect(cursor);
@@ -1480,6 +1483,7 @@ public class MatSystemSurface : IMatSystemSurface
 
 	public void SetCursorAlwaysVisible(bool visible) {
 		CursorAlwaysVisible = visible;
+		CursorSelect(visible ? (nint)CursorCode.AlwaysVisiblePush : (nint)CursorCode.AlwaysVisiblePop);
 	}
 
 	public void SetEmbeddedPanel(IPanel panel) {
@@ -1618,10 +1622,14 @@ public class MatSystemSurface : IMatSystemSurface
 				launcherMgr.SetMouseVisible(true);
 			}
 		}
+		else
+			HideHardwareCursor();
 	}
 
 	private void HideHardwareCursor() {
-		throw new NotImplementedException();
+		CurrentlySetCursor = launcherMgr.GetHardwareCursor((nint)CursorCode.None);
+		launcherMgr.SetMouseCursor(CurrentlySetCursor);
+		launcherMgr.SetMouseVisible(false);
 	}
 
 	public bool SetFontGlyphSet(IFont font, ReadOnlySpan<char> windowsFontName, int tall, int weight, int blur, int scanlines, SurfaceFontFlags flags, int rangeMin = 0, int rangeMax = 0) {

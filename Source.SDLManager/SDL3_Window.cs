@@ -134,7 +134,7 @@ public unsafe class SDL3_Window : IWindow
 						}
 						// Msg($"MouseXDelta = {ev.motion.xrel}, MouseYDelta = {ev.motion.yrel}\n");
 
-						if (!RawInput && !CursorVisible && (
+						if (!OperatingSystem.IsWindows() && !RawInput && !CursorVisible && (
 							ev.motion.x < MouseTargetX - WarpDelta ||
 							 ev.motion.x > MouseTargetX + WarpDelta ||
 							 ev.motion.y < MouseTargetY - WarpDelta ||
