@@ -95,10 +95,11 @@ public class ClientLauncherAPI(IGame game, IServiceProvider services, Common COM
 	}
 
 	private IClientLauncherAPI.Result Main() {
+		ConVar.Register();
+
 		if (!Init())
 			return IClientLauncherAPI.Result.InitFailed;
 
-		ConVar.Register();
 		return RunListenServer();
 	}
 
