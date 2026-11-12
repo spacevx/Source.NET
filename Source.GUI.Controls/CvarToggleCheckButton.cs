@@ -11,11 +11,9 @@ public class CvarToggleCheckButton : CheckButton
 
 	string? CvarName;
 	bool StartValue;
-	ConVarRef Cvar;
 
 	public CvarToggleCheckButton(Panel? parent, ReadOnlySpan<char> name, ReadOnlySpan<char> text, ReadOnlySpan<char> cvarName) : base(parent, name, text) {
 		CvarName = cvarName.Length > 0 ? new(cvarName) : null;
-		Cvar = new(CvarName);
 		if (CvarName != null)
 			Reset();
 		AddActionSignalTarget(this);
@@ -27,10 +25,11 @@ public class CvarToggleCheckButton : CheckButton
 			return;
 		}
 
-		if (!Cvar.IsValid())
+		ConVarRef var = new(CvarName, true);
+		if (!var.IsValid())
 			return;
 
-		bool value = Cvar.GetBool();
+		bool value = var.GetBool();
 
 		if (value != StartValue) {
 			SetSelected(value);
@@ -46,7 +45,7 @@ public class CvarToggleCheckButton : CheckButton
 			return;
 
 		StartValue = IsSelected();
-		ConVarRef var = new(CvarName);
+		ConVarRef var = new(CvarName, true);
 		if (!var.IsValid())
 			return;
 		var.SetValue(StartValue);
@@ -56,7 +55,7 @@ public class CvarToggleCheckButton : CheckButton
 		if (CvarName == null || CvarName.Length == 0)
 			return;
 
-		ConVarRef var = new(CvarName);
+		ConVarRef var = new(CvarName, true);
 		if (!var.IsValid())
 			return;
 
@@ -89,7 +88,7 @@ public class CvarToggleCheckButton : CheckButton
 		else
 			StartValue = false;
 
-		ConVarRef var = new(CvarName);
+		ConVarRef var = new(CvarName, true);
 		if (var.IsValid()) {
 			if (var.GetBool())
 				SetSelected(true);
