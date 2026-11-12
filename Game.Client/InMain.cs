@@ -51,7 +51,7 @@ public partial class Input(ISurface Surface, IViewRender view, ThirdPersonManage
 	readonly ConVar cl_backspeed = new("450", FCvar.Replicated | FCvar.Cheat);
 	readonly ConVar lookspring = new("0", FCvar.Archive);
 	readonly ConVar lookstrafe = new("0", FCvar.Archive);
-	readonly ConVar in_joystick = new("0", FCvar.Archive);
+	readonly ConVar in_joystick = new("joystick", "0", FCvar.Archive);
 	readonly ConVar thirdperson_platformer = new("0", 0, "Player will aim in the direction they are moving.");
 	readonly ConVar thirdperson_screenspace = new("0", 0, "Movement will be relative to the camera, eg: left means screen-left");
 	readonly ConVar sv_noclipduringpause = new("0", FCvar.Replicated | FCvar.Cheat, "If cheats are enabled, then you can noclip with the game paused (for doing screenshots, etc.).");
