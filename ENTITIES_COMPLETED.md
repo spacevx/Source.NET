@@ -16820,7 +16820,7 @@ Datadesc and methods that the entities above inherit.
     - [x] `FindNamedSetting`
     - [x] `FindSceneFile`
     - [x] `FlexControllerLocalToGlobal`
-    - [ ] `FlexSettingLessFunc`
+    - [x] `FlexSettingLessFunc` <!-- manual -->
     - [x] `GetFlexWeight`
     - [x] `GetScenePriority`
     - [x] `GetSpecialDSP`
