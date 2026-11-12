@@ -135,7 +135,7 @@ GameRules
 
 	public override void RefreshSkillData(bool forceUpdate) {
 		base.RefreshSkillData(forceUpdate);
-#if !TF_DLL && !CSTRIKE_DLL
+#if !TF_DLL && !CSTRIKE_DLL && !GMOD_DLL
 		ConVarRef suitcharger = new("sk_suitcharger");
 		suitcharger.SetValue(30);
 #endif
