@@ -167,9 +167,22 @@ public partial class BaseTrigger : BaseToggle
 	//			turn off this trigger
 	//------------------------------------------------------------------------------
 	public virtual void InputDisableAndEndTouch(InputData inputdata) {
+#if GMOD_DLL
 		EndTouchOnAllTouchers();
+#else
+		for (int i = TouchingEntities.Count - 1; i >= 0; i--) {
+			BaseEntity? touching = (BaseEntity?)TouchingEntities[i].Get();
+			if (touching != null)
+				EndTouch(touching);
+			else
+				TouchingEntities.RemoveAt(i);
+		}
+
+		Disable();
+#endif
 	}
 
+#if GMOD_DLL
 	public void EndTouchOnAllTouchers() {
 		while (TouchingEntities.Count > 0) {
 			BaseEntity? touching = (BaseEntity?)TouchingEntities[^1].Get();
@@ -181,6 +194,7 @@ public partial class BaseTrigger : BaseToggle
 
 		Disable();
 	}
+#endif
 
 	public virtual void InputTouchTest(InputData inputdata) {
 		TouchTest();
@@ -606,6 +620,7 @@ public class TriggerHurt : BaseTrigger
 		base.UpdateOnRemove();
 	}
 
+#if GMOD_DLL
 	public override bool KeyValue(ReadOnlySpan<char> keyName, ReadOnlySpan<char> value) {
 		if (FStrEq(keyName, "damagetype")) {
 			BitsDamageInflict = atoi(value);
@@ -614,6 +629,7 @@ public class TriggerHurt : BaseTrigger
 
 		return base.KeyValue(keyName, value);
 	}
+#endif
 
 	//-----------------------------------------------------------------------------
 	// Purpose: Called when spawning, after keyvalues have been handled.

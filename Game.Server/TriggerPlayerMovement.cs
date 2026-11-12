@@ -18,8 +18,10 @@ public partial class TriggerPlayerMovement : BaseTrigger
 	{
 		MoveAutoDisable = 0x80,      // disable auto movement
 		AutoDuck = 0x800,    // Duck automatically
+#if GMOD_DLL
 		AutoWalk = 0x1000,
 		DisableJump = 0x2000,
+#endif
 	}
 
 	//-----------------------------------------------------------------------------
@@ -36,16 +38,20 @@ public partial class TriggerPlayerMovement : BaseTrigger
 
 		InitTrigger();
 
+#if GMOD_DLL
 		if (HasSpawnFlags(SF.AutoDuck) || HasSpawnFlags(SF.AutoWalk) || HasSpawnFlags(SF.DisableJump)) {
 			ClientSidePredicted = true;
 			SetTransmitState(EdictFlags.Always);
 		}
+#endif
 	}
 
+#if GMOD_DLL
 	public override void UpdateOnRemove() {
 		EndTouchOnAllTouchers();
 		base.UpdateOnRemove();
 	}
+#endif
 
 	// UNDONE: This will not support a player touching more than one of these
 	// UNDONE: Do we care?  If so, ref count automovement in the player?
@@ -53,7 +59,9 @@ public partial class TriggerPlayerMovement : BaseTrigger
 		if (other == null || !PassesTriggerFilters(other))
 			return;
 
+#if GMOD_DLL
 		base.StartTouch(other);
+#endif
 
 		BasePlayer? player = ToBasePlayer(other);
 
@@ -63,6 +71,7 @@ public partial class TriggerPlayerMovement : BaseTrigger
 		if (HasSpawnFlags(SF.AutoDuck))
 			player.ForceButtons(InButtons.Duck);
 
+#if GMOD_DLL
 		if (HasSpawnFlags(SF.AutoWalk)) {
 			player.ForceButtons(InButtons.Walk);
 			player.DisableButtons(InButtons.Speed);
@@ -70,6 +79,7 @@ public partial class TriggerPlayerMovement : BaseTrigger
 
 		if (HasSpawnFlags(SF.DisableJump))
 			player.DisableButtons(InButtons.Jump);
+#endif
 
 		// UNDONE: Currently this is the only operation this trigger can do
 		if (HasSpawnFlags(SF.MoveAutoDisable))
@@ -77,7 +87,9 @@ public partial class TriggerPlayerMovement : BaseTrigger
 	}
 
 	public override void EndTouch(BaseEntity? other) {
+#if GMOD_DLL
 		base.EndTouch(other);
+#endif
 
 		if (other == null || !PassesTriggerFilters(other))
 			return;
@@ -90,6 +102,7 @@ public partial class TriggerPlayerMovement : BaseTrigger
 		if (HasSpawnFlags(SF.AutoDuck))
 			player.UnforceButtons(InButtons.Duck);
 
+#if GMOD_DLL
 		if (HasSpawnFlags(SF.AutoWalk)) {
 			player.UnforceButtons(InButtons.Walk);
 			player.EnableButtons(InButtons.Speed);
@@ -97,6 +110,7 @@ public partial class TriggerPlayerMovement : BaseTrigger
 
 		if (HasSpawnFlags(SF.DisableJump))
 			player.EnableButtons(InButtons.Jump);
+#endif
 
 		if (HasSpawnFlags(SF.MoveAutoDisable))
 			player.Local.AllowAutoMovement = true;
