@@ -206,7 +206,7 @@ public class Material : IMaterialInternal
 		InitializeRenderState();
 	}
 
-	static readonly ConVarRef mat_reduceparticles = new("mat_reduceparticles");
+	static readonly ConVar mat_reduceparticles = new("mat_reduceparticles", "0");
 
 	static int complainCount = 0;
 	public IMaterialVar FindVar(ReadOnlySpan<char> varName, out bool found, bool complain = true) {

@@ -53,6 +53,8 @@ public partial class Host
 	public static readonly ConVar developer = new("developer", "0", 0, "Set developer message level");
 	public static readonly ConVar host_timescale = new("host_timescale", "1.0", FCvar.Replicated, "Prescale the clock by this amount.");
 	public static readonly ConVar host_limitlocal = new("host_limitlocal", "0", 0, "Apply cl_cmdrate and cl_updaterate to loopback connection");
+	public static readonly ConVar host_thread_mode = new("host_thread_mode", "0", 0, "Run the host in threaded mode, (0 == off, 1 == if multicore, 2 == force)", 0, 2);
+	public static readonly ConVar closecaption = new("closecaption", "0", FCvar.Archive | FCvar.UserInfo, "Enable close captioning.");
 
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
 	public static GameClient? Client;
