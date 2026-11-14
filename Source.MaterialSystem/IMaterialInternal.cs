@@ -59,10 +59,20 @@ public class MaterialDict(MaterialSystem materials) : IEnumerable<IMaterialInter
 	}
 
 	public IMaterialInternal AddMaterialSubRect(Span<char> matNameWithExtension, ReadOnlySpan<char> textureGroupName, KeyValues keyValues, KeyValues pPatchKeyValues) {
-		IMaterialInternal material = materials.CreateMaterial(matNameWithExtension, textureGroupName, null);
+		IMaterialInternal material = new MaterialSubRect(materials, matNameWithExtension, textureGroupName, keyValues, pPatchKeyValues, true);
 		AddMaterialToMaterialList(material);
-		Warning($"AddMaterialSubRect TODO!\n");
 		return material;
+	}
+
+	public void RemoveMaterialSubRect(IMaterialInternal material) {
+		foreach (KeyValuePair<ulong, MaterialLookup> kvp in Dict) {
+			if (ReferenceEquals(kvp.Value.Material, material)) {
+				Dict.Remove(kvp.Key);
+				break;
+			}
+		}
+
+		MaterialSubRect.Destroy(material);
 	}
 
 	internal IMaterialInternal AddMaterial(Span<char> name, ReadOnlySpan<char> textureGroupName) {

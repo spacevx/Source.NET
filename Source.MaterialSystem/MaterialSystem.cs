@@ -965,9 +965,7 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 
 	public void AddMaterialToMaterialList(IMaterialInternal? material) => MaterialDict.AddMaterialToMaterialList(material!);
 	public void RemoveMaterial(IMaterialInternal? material) => MaterialDict.RemoveMaterial(material!);
-	public void RemoveMaterialSubRect(IMaterialInternal? material) {
-		throw new NotImplementedException("Incomplete port of IMaterialSystemInternal");
-	}
+	public void RemoveMaterialSubRect(IMaterialInternal? material) => MaterialDict.RemoveMaterialSubRect(material!);
 
 	public int GetLightmapWidth(int lightmap) => MatLightmaps.GetLightmapWidth(lightmap);
 	public int GetLightmapHeight(int lightmap) => MatLightmaps.GetLightmapHeight(lightmap);

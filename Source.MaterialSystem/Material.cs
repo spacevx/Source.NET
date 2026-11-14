@@ -813,7 +813,7 @@ public class Material : IMaterialInternal
 		return varCount;
 	}
 
-	private static IMaterialVar? CreateMaterialVarFromKeyValue(Material material, KeyValues keyValue) {
+	internal static IMaterialVar? CreateMaterialVarFromKeyValue(IMaterial material, KeyValues keyValue) {
 		ReadOnlySpan<char> name = GetVarName(keyValue);
 		switch (keyValue.Type) {
 			case KeyValues.Types.Int: return new MaterialVar(material, name, keyValue.GetInt());
@@ -844,7 +844,7 @@ public class Material : IMaterialInternal
 		return null;
 	}
 
-	private static IMaterialVar? CreateVectorMaterialVarFromKeyValue(Material material, KeyValues keyValue) {
+	private static IMaterialVar? CreateVectorMaterialVarFromKeyValue(IMaterial material, KeyValues keyValue) {
 		ReadOnlySpan<char> name = GetVarName(keyValue);
 		Span<float> vecVal = stackalloc float[4];
 		int dimensions = ParseVectorFromKeyValueString(keyValue, name, vecVal);
@@ -903,7 +903,7 @@ public class Material : IMaterialInternal
 		return i;
 	}
 
-	private static IMaterialVar? CreateMatrixVarFromKeyValue(Material material, KeyValues keyValue) {
+	private static IMaterialVar? CreateMatrixVarFromKeyValue(IMaterial material, KeyValues keyValue) {
 		ReadOnlySpan<char> scan = keyValue.GetString();
 		ReadOnlySpan<char> name = GetVarName(keyValue);
 		return null; // TODO: implement
