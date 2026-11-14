@@ -63,6 +63,7 @@ public class DecalModulate : BaseVSShader
 				ShaderShadow.SetVertexShader("decalmodulate", vshIndex.GetIndex());
 
 				StaticShaderIndex pshIndex = new(ShaderShadow, ShaderType.Pixel, "decalmodulate");
+				pshIndex.Set("CONVERT_TO_SRGB", HardwareConfig.NeedsShaderSRGBConversion());
 				ShaderShadow.SetPixelShader("decalmodulate", pshIndex.GetIndex());
 			}
 			else {
@@ -79,9 +80,11 @@ public class DecalModulate : BaseVSShader
 				ShaderShadow.SetVertexShader("decalmodulate", vshIndex.GetIndex());
 
 				StaticShaderIndex pshIndex = new(ShaderShadow, ShaderType.Pixel, "decalmodulate");
+				pshIndex.Set("CONVERT_TO_SRGB", HardwareConfig.NeedsShaderSRGBConversion());
 				ShaderShadow.SetPixelShader("decalmodulate", pshIndex.GetIndex());
 			}
 
+			// todo: VERTEX_FORMAT_COMPRESSED
 			VertexFormat flags = VertexFormat.Position;
 			flags |= HardwareConfig.HasFastVertexTextures() ? VertexFormat.Normal : 0;
 
@@ -131,7 +134,8 @@ public class DecalModulate : BaseVSShader
 				ShaderAPI.SetPixelShaderIndex(pshIndex.GetIndex());
 			}
 			else {
-				// todo: SetHWMorphVertexShaderState(VERTEX_SHADER_SHADER_SPECIFIC_CONST_6, VERTEX_SHADER_SHADER_SPECIFIC_CONST_7, SHADER_VERTEXTEXTURE_SAMPLER0), it needs hardware morphing ported first
+				// todo: never reached, HasFastVertexTextures() is a constant false in GMod (Windows and macOS). When forced, decals on single-bone models do not draw (SKINNING with one bone)
+				SetHWMorphVertexShaderState((int)VertexShaderConst.ShaderSpecificConst6, (int)VertexShaderConst.ShaderSpecificConst7, VertexTextureSampler.Sampler0);
 
 				DynamicShaderIndex vshIndex = new(ShaderAPI, ShaderType.Vertex);
 				vshIndex.Set("DYNAMIC_LIGHT", 0);

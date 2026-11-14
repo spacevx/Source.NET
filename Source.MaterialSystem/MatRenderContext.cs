@@ -510,6 +510,95 @@ public class MatRenderContext : MatRenderContextBase, IMatRenderContextInternal
 		}
 	}
 
+	// todo: CMorphMgr
+	static IMorphMgr? g_pMorphMgr => null;
+
+	public void BindStandardVertexTexture(VertexTextureSampler sampler, StandardTextureId id) {
+		switch (id) {
+			case StandardTextureId.MorphAccumulator:
+				g_pMorphMgr!.MorphAccumulator().BindVertexTexture(sampler);
+				return;
+
+			case StandardTextureId.MorphWeights:
+				g_pMorphMgr!.MorphWeights().BindVertexTexture(sampler);
+				return;
+
+			default:
+				Assert(false);
+				break;
+		}
+	}
+
+	public void GetStandardTextureDimensions(out int width, out int height, StandardTextureId id) {
+		width = 0;
+		height = 0;
+
+		ITexture? texture = null;
+		switch (id) {
+			case StandardTextureId.Lightmap:
+			case StandardTextureId.LightmapBumped:
+			case StandardTextureId.LightmapFullbright:
+			case StandardTextureId.LightmapBumpedFullbright:
+			case StandardTextureId.White:
+			case StandardTextureId.Black:
+			case StandardTextureId.Grey:
+			case StandardTextureId.GreyAlphaZero:
+			case StandardTextureId.NormalMapFlat:
+			default:
+				Assert(false);
+				Warning("GetStandardTextureDimensions: still unimplemented for this type!\n");
+				width = height = -1;
+				break;
+
+			case StandardTextureId.NormalizationCubemap:
+				// todo: TextureManager()->NormalizationCubemap()
+				throw new NotImplementedException();
+
+			case StandardTextureId.NormalizationCubemapSigned:
+				texture = TextureSystem.SignedNormalizationCubemap();
+				break;
+
+			case StandardTextureId.FrameBufferFullTexture0:
+			case StandardTextureId.FrameBufferFullTexture1: {
+					int textureIndex = id - StandardTextureId.FrameBufferFullTexture0;
+					texture = CurrentFrameBufferCopyTexture[textureIndex];
+				}
+				break;
+
+			case StandardTextureId.ColorCorrectionVolume0:
+			case StandardTextureId.ColorCorrectionVolume1:
+			case StandardTextureId.ColorCorrectionVolume2:
+			case StandardTextureId.ColorCorrectionVolume3:
+				// todo: TextureManager()->ColorCorrectionTexture()
+				throw new NotImplementedException();
+
+			case StandardTextureId.ShadowNoise2D:
+				// todo: TextureManager()->ShadowNoise2D()
+				throw new NotImplementedException();
+
+			case StandardTextureId.IdentityLightwarp:
+				// todo: TextureManager()->IdentityLightWarp()
+				return;
+
+			case StandardTextureId.MorphAccumulator:
+				texture = g_pMorphMgr?.MorphAccumulator();
+				break;
+
+			case StandardTextureId.MorphWeights:
+				texture = g_pMorphMgr?.MorphWeights();
+				break;
+		}
+
+		if (texture != null) {
+			width = texture.GetActualWidth();
+			height = texture.GetActualHeight();
+		}
+		else {
+			Warning("GetStandardTextureDimensions: Couldn't find the texture to get the dimensions!\n");
+			width = height = -1;
+		}
+	}
+
 	public override void SetFrameBufferCopyTexture(ITexture? texture, int textureIndex = 0) {
 		if (textureIndex < 0 || textureIndex >= MAX_FB_TEXTURES) {
 			Assert(false);

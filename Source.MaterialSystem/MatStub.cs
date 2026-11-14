@@ -509,6 +509,8 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public void SyncMatrix(MaterialMatrixMode mode) { }
 	public void RestoreShaderObjects(IServiceProvider services, int changeFlags = 0) { }
 	public void BindStandardTexture(Sampler sampler, StandardTextureId id) { }
+	public void BindStandardVertexTexture(VertexTextureSampler sampler, StandardTextureId id) { }
+	public void GetStandardTextureDimensions(out int width, out int height, StandardTextureId id) { width = 0; height = 0; }
 	public void BeginRender() { }
 	public void EndRender() { }
 	public void BindLocalCubemap(ITexture? texture) { }

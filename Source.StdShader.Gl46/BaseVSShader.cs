@@ -1,3 +1,4 @@
+using Source.Common;
 using Source.Common.Bitmap;
 using Source.Common.Commands;
 using Source.Common.MaterialSystem;
@@ -457,6 +458,26 @@ public partial class BaseVSShader : BaseShader
 		Span<float> color = [1.0f, 1.0f, 1.0f, 1.0f];
 		ComputeModulationColor(color);
 		ShaderAPI!.SetPixelShaderConstant(modulationVar, color);
+	}
+
+	public void SetHWMorphVertexShaderState(int dimConst, int subrectConst, VertexTextureSampler morphSampler) {
+		if (!ShaderAPI!.IsHWMorphingEnabled())
+			return;
+
+		ShaderAPI.GetStandardTextureDimensions(out int morphWidth, out int morphHeight, StandardTextureId.MorphAccumulator);
+
+		int dim = ShaderAPI.GetIntRenderingParameter((int)RenderParamInt.MorphAccumulator4TupleCount);
+		Span<float> morphAccumSize = [morphWidth, morphHeight, dim, 0.0f];
+		ShaderAPI.SetVertexShaderConstant(dimConst, morphAccumSize);
+
+		int xOffset = ShaderAPI.GetIntRenderingParameter((int)RenderParamInt.MorphAccumulatorXOffset);
+		int yOffset = ShaderAPI.GetIntRenderingParameter((int)RenderParamInt.MorphAccumulatorYOffset);
+		int width = ShaderAPI.GetIntRenderingParameter((int)RenderParamInt.MorphAccumulatorSubrectWidth);
+		int height = ShaderAPI.GetIntRenderingParameter((int)RenderParamInt.MorphAccumulatorSubrectHeight);
+		Span<float> morphAccumSubrect = [xOffset, yOffset, width, height];
+		ShaderAPI.SetVertexShaderConstant(subrectConst, morphAccumSubrect);
+
+		ShaderAPI.BindStandardVertexTexture(morphSampler, StandardTextureId.MorphAccumulator);
 	}
 
 	public void SetVertexShaderConstant(int vertexReg, int constantVar) {

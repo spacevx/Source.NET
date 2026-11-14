@@ -15,5 +15,7 @@ public interface IShaderUtil
 	void SyncMatrix(MaterialMatrixMode mode);
 	void RestoreShaderObjects(IServiceProvider services, int changeFlags = 0);
 	void BindStandardTexture(Sampler sampler, StandardTextureId id);
+	void BindStandardVertexTexture(VertexTextureSampler sampler, StandardTextureId id);
+	void GetStandardTextureDimensions(out int width, out int height, StandardTextureId id);
 	bool IsRenderThreadSafe();
 }

@@ -51,7 +51,7 @@ public class HardwareConfig : IMaterialSystemHardwareConfig
 	}
 
 	public int GetMaxVertexTextureDimension() {
-		throw new NotImplementedException();
+		return 0;
 	}
 
 	public unsafe int GetSamplerCount() {
@@ -84,7 +84,7 @@ public class HardwareConfig : IMaterialSystemHardwareConfig
 	}
 
 	public int GetVertexTextureCount() {
-		throw new NotImplementedException();
+		return 0;
 	}
 
 	public bool HasDestAlphaBuffer() {
@@ -180,7 +180,17 @@ public class HardwareConfig : IMaterialSystemHardwareConfig
 	}
 
 	public int NeedsShaderSRGBConversion() {
-		throw new NotImplementedException();
+		int value = r_shader_srgb.GetInt();
+		switch (value) {
+			case 0:
+				return 0;
+
+			case 1:
+				return 1;
+
+			default:
+				return 1; // todo: m_Caps.m_bDX10Blending
+		}
 	}
 
 	public int NumPixelShaderConstants() {

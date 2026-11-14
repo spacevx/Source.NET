@@ -317,6 +317,16 @@ public class Texture(MaterialSystem materials) : ITextureInternal
 			Warning($"Tried to bind texture {GetName()}, but texture handles are not valid.\n");
 	}
 
+	public void BindVertexTexture(VertexTextureSampler sampler, int frame = 0) {
+		if (!materials.ShaderDevice.IsUsingGraphics())
+			return;
+
+		if (frame < 0 || frame >= FrameCount)
+			frame = 0;
+
+		materials.ShaderAPI.BindVertexTexture(sampler, TextureHandles![frame]);
+	}
+
 	public void Download(Rectangle rect, int additionalCreationFlags) {
 		if (materials.ShaderAPI.CanDownloadTextures()) {
 			MaterialLock hLock = materials.Lock();

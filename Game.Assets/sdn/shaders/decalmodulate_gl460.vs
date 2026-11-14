@@ -24,6 +24,8 @@ layout(std140, binding = 5) uniform source_vs_constants {
 };
 
 const int SHADER_SPECIFIC_CONST_0 = 48;
+const int SHADER_SPECIFIC_CONST_10 = 14;
+const int SHADER_SPECIFIC_CONST_11 = 15;
 
 #include "common_gl460.vs"
 #include "common_morph_gl460.vs"
@@ -38,6 +40,12 @@ const bool g_bDecalOffset	= false;
 
 #define cBaseTexCoordTransform0		vs_const[SHADER_SPECIFIC_CONST_0 + 0]
 #define cBaseTexCoordTransform1		vs_const[SHADER_SPECIFIC_CONST_0 + 1]
+
+#if MORPHING
+#define cMorphTargetTextureDim		vs_const[SHADER_SPECIFIC_CONST_10].xyz
+#define cMorphSubrect				vs_const[SHADER_SPECIFIC_CONST_11]
+layout(binding = 16) uniform sampler2D morphSampler;
+#endif
 
 layout(location = 0) out vec2 vs_BaseTexCoord;
 layout(location = 1) out vec4 vs_WorldPos_ProjPosZ;
@@ -55,7 +63,8 @@ void main()
 #if !MORPHING
     ApplyMorph(v_FlexPosition.xyz, v_FlexNormal, vPosition.xyz, vNormal);
 #else
-    // todo: ApplyMorph from the morph target texture (vertex ID, v_TexCoord2), it needs hardware morphing ported first
+    // todo: v.vVertexID (POSITION2), the vertex ID stream is not ported
+    ApplyMorph(morphSampler, cMorphTargetTextureDim, cMorphSubrect, 0.0, v_TexCoord2.xyz, vPosition.xyz, vNormal);
 #endif
 
     vec3 worldNormal, worldPos;

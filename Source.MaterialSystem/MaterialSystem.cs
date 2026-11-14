@@ -1299,6 +1299,8 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 	public void EndUpdateLightmaps() => MatLightmaps.EndUpdateLightmaps();
 
 	public void BindStandardTexture(Sampler sampler, StandardTextureId id) => GetRenderContextInternal().BindStandardTexture(sampler, id);
+	public void BindStandardVertexTexture(VertexTextureSampler sampler, StandardTextureId id) => HardwareRenderContext.BindStandardVertexTexture(sampler, id);
+	public void GetStandardTextureDimensions(out int width, out int height, StandardTextureId id) => HardwareRenderContext.GetStandardTextureDimensions(out width, out height, id);
 
 	bool ReplacementFilesValid;
 	readonly Dictionary<string, KeyValues> Replacements = new(StringComparer.OrdinalIgnoreCase);

@@ -25,6 +25,7 @@ public interface ITextureInternal : ITexture
 
 	void Bind(Sampler sampler);
 	void Bind(Sampler sampler, int frame);
+	void BindVertexTexture(VertexTextureSampler sampler, int frame = 0);
 	int GetTextureHandle(int frame, int textureChannel = 0);
 	void OnRestore();
 	void SetFilteringAndClampingMode(bool onlyLodValues = false);
@@ -58,6 +59,7 @@ file sealed class EnvCubemapSentinel : ITextureInternal
 	public void DeleteIfUnreferenced() => throw new NotSupportedException();
 	public void Download(Rectangle rect = default, int additionalCreationFlags = 0) => throw new NotSupportedException();
 	public void CopyFrameBufferToMe(int renderTargetID = 0, Rectangle? srcRect = null, Rectangle? dstRect = null) => throw new NotSupportedException();
+	public void BindVertexTexture(VertexTextureSampler sampler, int frame = 0) => throw new NotSupportedException();
 	public nint GetApproximateVidMemBytes() => throw new NotSupportedException();
 	public bool IsError() => false;
 	public bool IsVolumeTexture() => throw new NotSupportedException();

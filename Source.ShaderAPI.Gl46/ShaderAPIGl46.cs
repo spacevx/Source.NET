@@ -330,6 +330,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			InitVertexAndPixelShaders();
 		}
 
+		HWMorphingEnabled = false;
+
 		int width = 0, height = 0;
 		Singleton<ILauncherManager>().DisplayedSize(out width, out height);
 		ShaderViewport viewport = new ShaderViewport(0, 0, width, height);
@@ -355,7 +357,8 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void SetDefaultState() {
-
+		// todo: the rest of CShaderAPIDx8::SetDefaultState
+		MarkUnusedVertexFields(0, []);
 	}
 
 	public IShaderShadow NewShaderShadow(ReadOnlySpan<char> materialName) => new ShadowStateGl46(this, (IShaderSystemInternal)ShaderManager, materialName);
@@ -3145,8 +3148,10 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		return ref FlashlightState;
 	}
 
+	bool HWMorphingEnabled;
+
 	public bool IsHWMorphingEnabled() {
-		throw new NotImplementedException();
+		return HWMorphingEnabled;
 	}
 
 	public void GetWorldSpaceCameraPosition(Span<float> eyePos) {
@@ -3175,8 +3180,17 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		(SceneFogMode != MaterialFogMode.LinearBelowFogZ) &&
 		(GetIntRenderingParameter(RenderParamInt.WriteDepthToDestAlpha) != 0);
 
+	uint UnusedVertexFields;
+	uint UnusedTextureCoords;
+
 	public void MarkUnusedVertexFields(uint flags, Span<bool> unusedTexCoords) {
-		throw new NotImplementedException();
+		// todo: MeshMgr()->MarkUnusedVertexFields, read by CMeshDX8::IsValidVertexFormat
+		UnusedVertexFields = flags;
+		UnusedTextureCoords = 0;
+		for (int i = 0; i < unusedTexCoords.Length; ++i) {
+			if (unusedTexCoords[i])
+				UnusedTextureCoords |= 1u << i;
+		}
 	}
 
 	public void ExecuteCommandBuffer(ICommandStorageBuffer storage) {
@@ -3389,8 +3403,19 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 		throw new NotImplementedException("Incomplete port of IShaderAPI");
 	}
 
+	readonly ShaderAPITextureHandle_t[] BoundVertexTextures = [INVALID_SHADERAPI_TEXTURE_HANDLE, INVALID_SHADERAPI_TEXTURE_HANDLE, INVALID_SHADERAPI_TEXTURE_HANDLE, INVALID_SHADERAPI_TEXTURE_HANDLE];
+
 	public void BindVertexTexture(VertexTextureSampler sampler, ShaderAPITextureHandle_t textureHandle) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		BoundVertexTextures[(int)sampler] = textureHandle;
+		CommitVertexTextures();
+	}
+
+	void CommitVertexTextures() {
+		int count = HardwareConfig!.GetVertexTextureCount();
+		for (int i = 0; i < count; ++i) {
+			ShaderAPITextureHandle_t textureHandle = BoundVertexTextures[i];
+			glBindTextureUnit((uint)Sampler.MaxSamplers + (uint)i, textureHandle != INVALID_SHADERAPI_TEXTURE_HANDLE ? GetGL46Texture(textureHandle) : 0);
+		}
 	}
 
 	public void ClearBuffersObeyStencil(bool clearColor, bool clearDepth) {
@@ -3492,7 +3517,10 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void EnableHWMorphing(bool enable) {
-		throw new NotImplementedException("Incomplete port of IShaderAPI");
+		if (HWMorphingEnabled != enable) {
+			FlushBufferedPrimitives();
+			HWMorphingEnabled = enable;
+		}
 	}
 
 	public void EnableShaderShaderMutex(bool enable) { }
@@ -3903,7 +3931,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void BindStandardVertexTexture(VertexTextureSampler sampler, StandardTextureId id) {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		ShaderUtil.BindStandardVertexTexture(sampler, id);
 	}
 
 	public void ClearStencilBufferRectangle(int xmin, int ymin, int xmax, int ymax, int value) {
@@ -4011,7 +4039,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	}
 
 	public void GetStandardTextureDimensions(out int width, out int height, StandardTextureId id) {
-		throw new NotImplementedException("Incomplete port of IShaderDynamicAPI");
+		ShaderUtil.GetStandardTextureDimensions(out width, out height, id);
 	}
 
 	public Vector3 GetVectorRenderingParameter(int parmNumber) {
