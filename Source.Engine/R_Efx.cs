@@ -11,9 +11,15 @@ namespace Source.Engine;
 
 public class VEfx : IVEfx
 {
-	public int DrawDecalIndexFromName(ReadOnlySpan<char> name) => throw new NotImplementedException();
+	public int DrawDecalIndexFromName(ReadOnlySpan<char> name) {
+#if !SWDS
+		return Render.Draw_DecalIndexFromName(name, out _);
+#else
+		return 0;
+#endif
+	}
 
-	public ReadOnlySpan<char> DrawDecalNameFromIndex(int index) => throw new NotImplementedException();
+	public ReadOnlySpan<char> DrawDecalNameFromIndex(int index) => Render.Draw_DecalNameFromIndex(index);
 
 	public void DecalShoot(int textureIndex, int entity, Model? model, in Vector3 modelOrigin, in QAngle modelAngles, in Vector3 position, Vector3? saxis, int flags) {
 		Color white = new(255, 255, 255, 255);

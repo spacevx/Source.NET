@@ -47,6 +47,18 @@ public partial class World : BaseEntity
 		ColdWorld = false;
 	}
 
+	public override void DecalTrace(ref Trace trace, ReadOnlySpan<char> decalName) {
+		int index = decalsystem.GetDecalIndexForName(decalName);
+		if (index < 0)
+			return;
+
+		BroadcastRecipientFilter filter = new();
+		if (trace.HitBox != 0)
+			te.Decal(ref filter, 0.0f, trace.EndPos, trace.StartPos, 0, trace.HitBox, index);
+		else
+			te.WorldDecal(ref filter, 0.0f, trace.EndPos, index);
+	}
+
 	public override void Precache() {
 		g_WorldEntity = this;
 		g_fGameOver = false;

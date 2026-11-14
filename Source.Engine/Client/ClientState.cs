@@ -1059,7 +1059,7 @@ IModelLoader modelloader, ICommandLine commandLine,
 		if (DecalPrecacheTable == null)
 			return;
 
-		if (tableIndex < 0 || tableIndex >= DecalPrecacheTable.GetNumStrings())
+		if (tableIndex < 0 || tableIndex >= PrecacheItem.MAX_BASE_DECAL || tableIndex >= DecalPrecacheTable.GetNumStrings())
 			return;
 
 		ReadOnlySpan<char> name = DecalPrecacheTable.GetString(tableIndex);

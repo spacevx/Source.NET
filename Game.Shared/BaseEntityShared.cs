@@ -637,6 +637,21 @@ public partial class
 	public BasePlayer? GetSimulatingPlayer() => PlayerSimulationOwner.Get();
 	public virtual Vector3 WorldSpaceCenter() => CollisionProp().WorldSpaceCenter();
 
+	public virtual void DecalTrace(ref Trace trace, ReadOnlySpan<char> decalName) {
+		int index = decalsystem.GetDecalIndexForName(decalName);
+		if (index < 0)
+			return;
+
+		Assert(trace.Ent != null);
+
+		BroadcastRecipientFilter filter = new();
+#if CLIENT_DLL
+		te.Decal(filter, 0.0f, trace.EndPos, trace.StartPos, trace.GetEntityIndex(), trace.HitBox, index);
+#else
+		te.Decal(ref filter, 0.0f, trace.EndPos, trace.StartPos, trace.GetEntityIndex(), trace.HitBox, index);
+#endif
+	}
+
 	public void SetPlayerSimulated(BasePlayer owner) {
 		b_IsPlayerSimulated = true;
 		owner.AddToPlayerSimulationList(owner);

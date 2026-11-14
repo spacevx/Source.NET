@@ -19,11 +19,29 @@ public partial class C_TEBSPDecal : C_BaseTempEntity
 	public int Entity;
 	[NetworkVar("m_nIndex")]
 	public int Index;
+
+	public override void PostDataUpdate(DataUpdateType updateType) {
+		C_BaseEntity? ent = cl_entitylist.GetEnt(Entity);
+		if (ent == null) {
+			DevMsg(1, $"Decal: entity = {Entity}");
+			return;
+		}
+
+		if (EffectsClient.r_decals.GetInt() != 0)
+			effects.DecalShoot(Index, Entity, ent.GetModel(), ent.GetAbsOrigin(), ent.GetAbsAngles(), Origin, null, (int)Source.Engine.FDecal.Permanent);
+	}
 }
 
 public static partial class TempEnts
 {
 	public static void TE_BSPDecal(IRecipientFilter filter, float delay, in Vector3 pos, int entity, int index) {
-		throw new NotImplementedException();
+		C_BaseEntity? ent = cl_entitylist.GetEnt(entity);
+		if (ent == null) {
+			DevMsg(1, $"Decal: entity = {entity}");
+			return;
+		}
+
+		if (EffectsClient.r_decals.GetInt() != 0)
+			effects.DecalShoot(index, entity, ent.GetModel(), ent.GetAbsOrigin(), ent.GetAbsAngles(), pos, null, (int)Source.Engine.FDecal.Permanent);
 	}
 }

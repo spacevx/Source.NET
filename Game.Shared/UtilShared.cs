@@ -13,6 +13,8 @@ using Source.Common.Formats.BSP;
 using Game.Client;
 #endif
 
+using Game.Shared;
+
 using Source.Common.Hashing;
 using Source.Common.Mathematics;
 using Source.Engine;
@@ -183,6 +185,45 @@ public static partial class Util
 	public static BasePlayer PlayerByIndex(int entindex) => ToBasePlayer(cl_entitylist.GetEnt(entindex));
 #endif
 	static readonly ConVar developer = new("developer", "0", 0, "Set developer message level"); // developer mode
+
+	static readonly ConVar violence_hblood = new("violence_hblood", "1", 0, "Draw human blood");
+	static readonly ConVar violence_hgibs = new("violence_hgibs", "1", 0, "Show human gib entities");
+	static readonly ConVar violence_ablood = new("violence_ablood", "1", 0, "Draw alien blood");
+	static readonly ConVar violence_agibs = new("violence_agibs", "1", 0, "Show alien gib entities");
+
+	public static bool IsLowViolence() {
+		if (!violence_hblood.GetBool() || !violence_ablood.GetBool() || !violence_hgibs.GetBool() || !violence_agibs.GetBool())
+			return true;
+
+		return engine.IsLowViolence();
+	}
+
+	public static bool ShouldShowBlood(Shared.BloodColor color) {
+		if (color != Shared.BloodColor.DontBleed) {
+			if (color == Shared.BloodColor.Red)
+				return violence_hblood.GetBool();
+			else
+				return violence_ablood.GetBool();
+		}
+		return false;
+	}
+
+	public static void DecalTrace(ref Trace trace, ReadOnlySpan<char> decalName) {
+		if (trace.Fraction == 1.0f)
+			return;
+
+		BaseEntity entity = trace.Ent!;
+		entity.DecalTrace(ref trace, decalName);
+	}
+
+	public static void BloodDecalTrace(ref Trace trace, Shared.BloodColor bloodColor) {
+		if (ShouldShowBlood(bloodColor)) {
+			if (bloodColor == Shared.BloodColor.Red)
+				DecalTrace(ref trace, "Blood");
+			else
+				DecalTrace(ref trace, "YellowBlood");
+		}
+	}
 
 	public static Contents PointContents(in Vector3 vec) => enginetrace.GetPointContents(vec, out _);
 

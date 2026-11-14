@@ -747,6 +747,18 @@ public static partial class Util
 	}
 #endif
 
+	public static int PrecacheDecal(ReadOnlySpan<char> name, bool preload = false) {
+		if (!BaseEntity.IsPrecacheAllowed()) {
+			if (!engine.IsDecalPrecached(name)) {
+				AssertMsg(false, "UTIL_PrecacheDecal:  too late");
+
+				Warning($"Late precache of {name}\n");
+			}
+		}
+
+		return engine.PrecacheDecal(name, preload);
+	}
+
 	public static Vector3 RandomBloodVector() {
 		Vector3 direction;
 

@@ -30,7 +30,9 @@ public static partial class LuaGame
 		LuaObject materials = new();
 		materials.SetFromStack(2);
 		if (!materials.isTable()) {
-			// decalsystem.AddDecal(lua.CheckString(1), lua.CheckString(2)); // TODO!!!
+			string name = lua.CheckString(1);
+			string material = lua.CheckString(2);
+			decalsystem.AddDecal(name, material);
 			materials.UnReference();
 			return 0;
 		}
@@ -45,8 +47,8 @@ public static partial class LuaGame
 		}
 		entry.UnReference();
 
-		// if (list.Count != 0)
-		// 	decalsystem.AddDecal(lua.CheckString(1), list); // TODO!!!
+		if (list.Count != 0)
+			decalsystem.AddDecalEx(lua.CheckString(1), System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list));
 		materials.UnReference();
 		return 0;
 	}

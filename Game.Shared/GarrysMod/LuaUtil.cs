@@ -741,6 +741,73 @@ public static partial class LuaUtil
 		return 1;
 	}
 
+	[LuaFunction]
+	static int Decal(ILuaInterface lua) {
+		string name = lua.CheckString(1);
+		if (name.Length == 0 || unchecked((sbyte)name[0]) <= (sbyte)' ') {
+			Warning("util.Decal: Invalid String\n");
+			return 0;
+		}
+
+		int index = decalsystem.GetDecalIndexForName(name);
+		if (index < 0)
+			return 0;
+
+		Vector3 start = LuaVector.Get_Vector(2);
+		Vector3 end = LuaVector.Get_Vector(3);
+
+		LuaObject filterObj = new(4, LuaType.None);
+		TraceFilterLua filter = new(CollisionGroup.None);
+		if (!filterObj.isNil()) {
+			if (filterObj.isTable()) {
+				LuaObject entry = new();
+				for (int i = 1; ; i++) {
+					filterObj.GetMember(i, entry);
+					IHandleEntity? ent = entry.isEntity() ? entry.GetEntity() : null;
+					if (ent == null)
+						break;
+					filter.AddEntityToIgnore(ent);
+				}
+				entry.UnReference();
+			}
+			else if (filterObj.GetType() == LuaType.Entity)
+				filter.AddEntityToIgnore(filterObj.GetEntity());
+		}
+		filterObj.UnReference();
+
+		Ray ray = default;
+		ray.Init(start, end);
+		enginetrace.TraceRay(ray, Mask.Solid, ref filter, out Trace tr);
+		filter.Function.UnReference();
+
+		BroadcastRecipientFilter recipients = new();
+		recipients.SetIgnorePredictionCull(true);
+#if CLIENT_DLL
+		te.Decal(recipients, 0.0f, tr.EndPos, tr.StartPos, tr.GetEntityIndex(), tr.HitBox, index);
+#else
+		te.Decal(ref recipients, 0.0f, tr.EndPos, tr.StartPos, tr.GetEntityIndex(), tr.HitBox, index);
+#endif
+		return 0;
+	}
+
+	[LuaFunction]
+	static int DecalMaterial(ILuaInterface lua) {
+		string name = lua.CheckString(1);
+		if (name.Length == 0 || unchecked((sbyte)name[0]) <= (sbyte)' ') {
+			DevMsg("util.Decal: Invalid String\n");
+			return 0;
+		}
+
+		ReadOnlySpan<char> material = decalsystem.GetDecalMaterial(name);
+		if (material.IsEmpty)
+			return 0;
+
+		lua.PushString(material);
+		return 1;
+	}
+
+	// todo: util.DecalEx (client), it needs engine GMOD_PlaceDecalMaterial and IVModelRender::GMODAddDecal ported first
+
 	static TraceFilterLua TraceFilterFromTable(LuaObject data) {
 		TraceFilterLua filter = new((CollisionGroup)data.GetMemberInt("collisiongroup", 0));
 		filter.SetIgnoreWorld(data.GetMemberBool("ignoreworld", false));

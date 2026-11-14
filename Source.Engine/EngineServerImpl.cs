@@ -608,7 +608,8 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 
 	public bool IsDecalPrecached(ReadOnlySpan<char> s) {
-		throw new NotImplementedException();
+		int idx = SV.DecalIndex(s);
+		return idx != -1;
 	}
 
 	public bool IsDedicatedServer() => sv.IsDedicated();
@@ -812,7 +813,8 @@ internal class EngineServer(Cbuf Cbuf, Host Host) : IEngineServer
 	}
 
 	public int PrecacheDecal(ReadOnlySpan<char> name, bool preload = false) {
-		throw new NotImplementedException();
+		int i = SV.FindOrAddDecal(name, preload);
+		return i < 0 ? 0 : i;
 	}
 
 	public int PrecacheGeneric(ReadOnlySpan<char> s, bool preload = false) {

@@ -13,4 +13,14 @@ public partial class SV {
 
 		return sv.PrecacheModel(name, flags);
 	}
+
+	public static int DecalIndex(ReadOnlySpan<char> name) => sv.LookupDecalIndex(name);
+
+	public static int FindOrAddDecal(ReadOnlySpan<char> name, bool preload) {
+		Res flags = Res.FatalIfMissing;
+		if (preload)
+			flags |= Res.Preload;
+
+		return sv.PrecacheDecal(name, flags);
+	}
 }

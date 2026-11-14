@@ -141,6 +141,8 @@ public class HLClient(IServiceProvider services, ClientGlobalVariables gpGlobals
 		get.IntroScreen()!.Update("Initializing VGUI", true);
 		get.IntroScreen()!.Update("Adding Game Systems", true);
 #endif
+		RuntimeHelpers.RunClassConstructor(typeof(DecalEmitterSystemGlobals).TypeHandle);
+
 		IGameSystem.Add(g_SoundEmitterSystem);
 		IGameSystem.Add(Singleton<ClientLeafSystem>());
 		IGameSystem.Add(DetailObjectSystem.GetDetailObjectSystem());
