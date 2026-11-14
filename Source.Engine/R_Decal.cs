@@ -67,6 +67,10 @@ public class Decal : IPoolableObject
 	public short EntityIndex;
 	public nint SortTree;
 	public nint SortMaterial;
+#if GMOD_DLL
+	public float WScale;
+	public float HScale;
+#endif
 
 	public void Init() { }
 	public void Reset() { }
@@ -92,6 +96,10 @@ public class DecalInfo
 	public object? UserData;
 	public Vector3? Normal;
 	public readonly List<SurfaceHandle_t> ApplySurfs = [];
+#if GMOD_DLL
+	public float WScale;
+	public float HScale;
+#endif
 }
 
 public struct DecalCache
@@ -512,7 +520,19 @@ public partial class Render
 	}
 
 	public static void DecalGetMaterialAndSize(int decalIndex, out IMaterial? decalMaterial, out float w, out float h) {
-		throw new NotImplementedException();
+		w = h = 0;
+		decalMaterial = Draw_DecalMaterial(decalIndex);
+		if (decalMaterial == null)
+			return;
+
+		float scale = 1.0f;
+
+		IMaterialVar decalScaleVar = decalMaterial.FindVar("$decalScale", out bool found, false);
+		if (found)
+			scale = decalScaleVar.GetFloatValue();
+
+		w = decalMaterial.GetMappingWidth() * scale;
+		h = decalMaterial.GetMappingHeight() * scale;
 	}
 
 #if !SWDS
@@ -565,10 +585,12 @@ public partial class Render
 
 		for (int i = 0; i < brushData.NumSurfaces; i++) {
 			Decal? next;
-			for (Decal? decal = MSurf_DecalPointer(i); decal != null; decal = next) {
+			SurfaceHandle_t surfID = i;
+			for (Decal? decal = MSurf_DecalPointer(surfID); decal != null; decal = next) {
 				next = decal.Next;
-				if (termPermanentDecals || ((decal.Flags & FDecal.Permanent) == 0 && (decal.Flags & FDecal.PlayerSpray) == 0))
+				if (termPermanentDecals || ((decal.Flags & FDecal.Permanent) == 0 && (decal.Flags & FDecal.PlayerSpray) == 0)) {
 					DecalUnlink(decal, brushData);
+				}
 				else if ((decal.Flags & FDecal.PlayerSpray) != 0) {
 					decal.FadeStartTime += 1.0f;
 					if (decal.FadeStartTime >= r_spray_lifetime.GetFloat())
@@ -577,9 +599,19 @@ public partial class Render
 			}
 
 			if (termPermanentDecals)
-				Assert(MSurf_DecalPointer(i) == null);
+				Assert(MSurf_DecalPointer(surfID) == null);
 		}
 	}
+
+#if GMOD_DLL
+	public static void GMOD_DecalRemoveEntity(int entityIndex) {
+		for (int i = 0; i < s_DecalPool.Count; i++) {
+			Decal? decal = s_DecalPool[i];
+			if (decal != null && decal.EntityIndex == entityIndex)
+				DecalUnlink(decal, SourceDllMain.host_state.WorldBrush);
+		}
+	}
+#endif
 
 	public static void DecalTermAll() {
 		s_DecalDestroyList = null;
@@ -884,7 +916,11 @@ public partial class Render
 		throw new NotImplementedException();
 	}
 
+#if GMOD_DLL
+	public static void DecalShoot_(IMaterial? material, int entity, Model? model, in Vector3 position, Vector3? saxis, FDecal flags, in Color rgbaColor, Vector3? normal, object? userData, float wScale, float hScale) {
+#else
 	static void DecalShoot_(IMaterial? material, int entity, Model? model, in Vector3 position, Vector3? saxis, FDecal flags, in Color rgbaColor, Vector3? normal, object? userData = null) {
+#endif
 		DecalInfo decalInfo = new();
 		decalInfo.FadeDuration = 0;
 		decalInfo.FadeStartTime = 0;
@@ -926,6 +962,19 @@ public partial class Render
 		decalInfo.Normal = normal;
 		decalInfo.ApplySurfs.Clear();
 
+#if GMOD_DLL
+		decalInfo.WScale = wScale;
+		decalInfo.HScale = hScale;
+
+		IMaterialVar? fadeDurationVar = material.FindVar("$decalFadeDuration", out found, false);
+		if (fadeDurationVar != null && found) {
+			decalInfo.Flags |= FDecal.Dynamic;
+			decalInfo.FadeDuration = fadeDurationVar.GetFloatValue();
+			IMaterialVar fadeTimeVar = material.FindVar("decalFadeTime", out found, false);
+			decalInfo.FadeStartTime = found ? fadeTimeVar.GetFloatValue() : 0.0f;
+		}
+#endif
+
 		DispInfo.DispInfo_ClearAllTags(decalInfo.Brush!.DispInfos);
 
 		BSPMNode nodes = decalInfo.Brush.Nodes![decalInfo.Model.Brush.FirstNode];
@@ -934,7 +983,11 @@ public partial class Render
 
 	public static void DecalShoot(int textureIndex, int entity, Model? model, in Vector3 position, Vector3? saxis, FDecal flags, in Color rgbaColor, Vector3? normal) {
 		IMaterial? material = Draw_DecalMaterial(textureIndex);
+#if GMOD_DLL
+		DecalShoot_(material, entity, model, in position, saxis, flags, in rgbaColor, normal, null, 1.0f, 1.0f);
+#else
 		DecalShoot_(material, entity, model, in position, saxis, flags, in rgbaColor, normal);
+#endif
 	}
 
 	public static void PlayerDecalShoot(IMaterial material, object? userData, int entity, Model? model, in Vector3 position, Vector3? saxis, FDecal flags, in Color rgbaColor) {
@@ -954,7 +1007,11 @@ public partial class Render
 
 		flags |= FDecal.PlayerSpray;
 
+#if GMOD_DLL
+		DecalShoot_(material, entity, model, in position, saxis, flags, in rgbaColor, null, userData, 1.0f, 1.0f);
+#else
 		DecalShoot_(material, entity, model, in position, saxis, flags, in rgbaColor, null, userData);
+#endif
 	}
 
 	static void DecalVertsLight(Span<DecalVert> v, in DecalContext context, SurfaceHandle_t surfID, int vertCount) {
@@ -1165,6 +1222,7 @@ public partial class Render
 	static void DecalCreate(DecalInfo decalInfo, SurfaceHandle_t surfID, float x, float y, bool forceForDisplacement) {
 		Decal? decal;
 
+#if !GMOD_DLL
 		if (surfID == -1) {
 			ConMsg("psurface NULL in R_DecalCreate!\n");
 			return;
@@ -1175,6 +1233,7 @@ public partial class Render
 			DecalUnlink(old, SourceDllMain.host_state.WorldBrush);
 			old = null;
 		}
+#endif
 
 		decal = DecalAlloc(decalInfo.Flags);
 		decal!.Flags = decalInfo.Flags;
@@ -1190,6 +1249,10 @@ public partial class Render
 
 		decal.Scale = decalInfo.Scale;
 		decal.EntityIndex = (short)decalInfo.Entity;
+#if GMOD_DLL
+		decal.WScale = decalInfo.WScale;
+		decal.HScale = decalInfo.HScale;
+#endif
 
 		if (decalInfo.FadeDuration > 0.0f) {
 			decal.Flags |= FDecal.Dynamic;
@@ -1197,6 +1260,12 @@ public partial class Render
 			decal.FadeStartTime = decalInfo.FadeStartTime;
 			decal.FadeStartTime += cl.GetTime();
 		}
+#if GMOD_DLL
+		else {
+			decal.FadeDuration = -1.0f;
+			decal.FadeStartTime = -1.0f;
+		}
+#endif
 
 		if ((decal.Flags & FDecal.PlayerSpray) != 0) {
 			decal.FadeStartTime = 0.0f;

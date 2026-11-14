@@ -84,6 +84,12 @@ public class CachedRenderData
 
 	public void SetModel(int model) {
 		Assert(Body >= 0);
+#if GMOD_DLL
+		if (Body < 0 || Body >= CacheDictionary.Count) {
+			Warning($"CCachedRenderData::SetModel: invalid body part {Body} (of {CacheDictionary.Count})\n");
+			return;
+		}
+#endif
 		Model = model;
 		CacheDictionary[Body].EnsureCount(Model + 1);
 		Mesh = -1;
@@ -94,6 +100,17 @@ public class CachedRenderData
 
 	public void SetMesh(int mesh) {
 		Assert((Model >= 0) && (Body >= 0));
+
+#if GMOD_DLL
+		if (Body < 0 || Body >= CacheDictionary.Count) {
+			Warning($"CCachedRenderData::SetModel: invalid body part {Body} (of {CacheDictionary.Count})\n");
+			return;
+		}
+		if (Model < 0 || Model >= CacheDictionary[Body].Count) {
+			Warning($"CCachedRenderData::SetModel: invalid model {Model} (of {CacheDictionary[Body].Count})\n");
+			return;
+		}
+#endif
 
 		Mesh = mesh;
 		CacheDictionary[Body][Model].EnsureCountDefault(Mesh + 1);
@@ -112,18 +129,95 @@ public class CachedRenderData
 		}
 	}
 
+	public void SetBodyModelMesh(int body, int model, int mesh) {
+		Body = body;
+		Model = model;
+		Mesh = mesh;
+
+#if GMOD_DLL
+		if (IsCacheDictValid()) {
+			ref CacheDict validDict = ref CollectionsMarshal.AsSpan(CacheDictionary[Body][Model])[Mesh];
+			if (validDict.Tag == CurrentTag) {
+				FirstFlexIndex = validDict.FirstIndex;
+				FirstThinFlexIndex = validDict.FirstIndex;
+				FirstWorldIndex = validDict.FirstIndex;
+				return;
+			}
+		}
+
+		FirstFlexIndex = -1;
+		FirstThinFlexIndex = -1;
+		FirstWorldIndex = -1;
+#else
+		Assert((Model >= 0) && (Body >= 0));
+		CacheDictionary[Body][Model].EnsureCountDefault(Mesh + 1);
+
+		ref CacheDict dict = ref CollectionsMarshal.AsSpan(CacheDictionary[Body][Model])[Mesh];
+
+		if (dict.Tag == CurrentTag) {
+			FirstFlexIndex = dict.FirstIndex;
+			FirstThinFlexIndex = dict.FirstIndex;
+			FirstWorldIndex = dict.FirstIndex;
+		}
+		else {
+			FirstFlexIndex = -1;
+			FirstThinFlexIndex = -1;
+			FirstWorldIndex = -1;
+		}
+#endif
+	}
+
+#if GMOD_DLL
+	public bool IsCacheDictValid() {
+		if (Body < 0 || Body >= CacheDictionary.Count) {
+			Warning($"CCachedRenderData: invalid body part {Body} (of {CacheDictionary.Count})\n");
+			return false;
+		}
+
+		List<List<CacheDict>> models = CacheDictionary[Body];
+		if (Model < 0 || Model >= models.Count) {
+			Warning($"CCachedRenderData: invalid model {Model} (of {models.Count})\n");
+			return false;
+		}
+
+		List<CacheDict> meshes = models[Model];
+		if (Mesh < 0 || Mesh >= meshes.Count) {
+			Warning($"CCachedRenderData: invalid mesh {Mesh} (of {meshes.Count})\n");
+			return false;
+		}
+
+		return true;
+	}
+#endif
+
+	public bool IsVertexPositionCached(int vertex) => FirstWorldIndex != -1 && WorldIndex[FirstWorldIndex + vertex].Tag == CurrentTag;
+
 	public bool IsFlexComputationDone() {
 		Assert((Model >= 0) && (Body >= 0) && (Mesh >= 0));
+
+#if GMOD_DLL
+		if (!IsCacheDictValid())
+			return false;
+#endif
 
 		ref CacheDict dict = ref CollectionsMarshal.AsSpan(CacheDictionary[Body][Model])[Mesh];
 		return dict.FlexTag == CurrentTag;
 	}
 
-	public void SetupComputation(MStudioMesh mesh, bool flexComputation = false) {
+	public bool SetupComputation(MStudioMesh mesh, bool flexComputation = false) {
 		Assert((Model >= 0) && (Body >= 0) && (Mesh >= 0));
+
+#if GMOD_DLL
+		if (!IsCacheDictValid())
+			return false;
+#endif
 
 		ref CacheDict dict = ref CollectionsMarshal.AsSpan(CacheDictionary[Body][Model])[Mesh];
 		if (dict.Tag != CurrentTag) {
+#if GMOD_DLL
+			if (IndexCount + mesh.NumVertices > 0x10000)
+				return false;
+#endif
 			dict.FirstIndex = (ushort)IndexCount;
 			dict.IndexCount = (ushort)mesh.NumVertices;
 			dict.Tag = CurrentTag;
@@ -136,6 +230,7 @@ public class CachedRenderData
 		FirstFlexIndex = dict.FirstIndex;
 		FirstThinFlexIndex = dict.FirstIndex;
 		FirstWorldIndex = dict.FirstIndex;
+		return true;
 	}
 
 	public bool IsVertexFlexed(int vertex) => FirstFlexIndex != -1 && FlexIndex[FirstFlexIndex + vertex].Tag == CurrentTag;

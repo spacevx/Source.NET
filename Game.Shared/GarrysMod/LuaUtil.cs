@@ -14,6 +14,8 @@ using Source.Common.Mathematics;
 using Source.Common.Physics;
 
 #if CLIENT_DLL
+using Source.Common.MaterialSystem;
+using Source.Engine;
 using Steamworks;
 #endif
 
@@ -806,7 +808,66 @@ public static partial class LuaUtil
 		return 1;
 	}
 
-	// todo: util.DecalEx (client), it needs engine GMOD_PlaceDecalMaterial and IVModelRender::GMODAddDecal ported first
+#if CLIENT_DLL
+	[LuaFunction]
+	static int DecalEx(ILuaInterface lua) {
+		IMaterial? material = (IMaterial?)LuaMaterial.LC_IMaterial.Get(1);
+		C_BaseEntity? ent = LuaEntity.Get_Entity(2, false);
+		Vector3 pos = LuaVector.Get_Vector(3);
+		Vector3 dir = LuaVector.Get_Vector(4);
+
+		Color color;
+		if (lua.GetType(5) == LuaType.Table) {
+			LuaObject table = new();
+			table.SetFromStack(5);
+			int r = table.GetMemberInt("r", 255);
+			int g = table.GetMemberInt("g", 255);
+			int b = table.GetMemberInt("b", 255);
+			int a = table.GetMemberInt("a", 255);
+			color = new((byte)r, (byte)g, (byte)b, (byte)a);
+			table.UnReference();
+		}
+		else {
+			color = new(255, 0, 255, 255);
+		}
+
+		float w = (float)lua.CheckNumber(6);
+		float h = (float)lua.CheckNumber(7);
+		if (ent == null)
+			return 0;
+
+		using C_BaseAnimating.AutoAllowBoneAccess boneaccess = new(true, true);
+		if (ent.IsBrushModel()) {
+			Vector3 localPos = pos;
+			if (ent.EntIndex() != 0) {
+				MathLib.AngleMatrix(ent.GetAbsAngles(), ent.GetAbsOrigin(), out Matrix3x4 matrix);
+				MathLib.VectorITransform(pos, matrix, out localPos);
+			}
+			else {
+				Util.TraceLine(pos - dir, pos + dir * 10.0f, Mask.Solid, null, CollisionGroup.None, out Trace tr);
+				if (tr.DidHitWorld() && tr.HitBox != 0) {
+					ICollideable? staticProp = StaticPropMgrGlobals.g_StaticPropMgr.GetStaticPropByIndex(tr.HitBox - 1);
+					if (staticProp != null) {
+						IClientRenderable renderable = staticProp.GetIClientUnknown()!.GetClientRenderable()!;
+						ModelInstanceHandle_t instance = renderable.GetModelInstance();
+						int body = renderable.GetBody();
+						modelrender.GMODAddDecal(instance, in pos, in dir, material, body, w, h);
+					}
+				}
+			}
+
+			engine.GMOD_PlaceDecalMaterial(material!, ent.IsBrushModel(), ent.EntIndex(), ent, in localPos, in dir, in color, w, h);
+		}
+		else {
+			ent.CreateModelInstance();
+			ModelInstanceHandle_t instance = ent.GetModelInstance();
+			int body = ent.GetStudioBody();
+			modelrender.GMODAddDecal(instance, in pos, in dir, material, body, w, h);
+		}
+
+		return 0;
+	}
+#endif
 
 	static TraceFilterLua TraceFilterFromTable(LuaObject data) {
 		TraceFilterLua filter = new((CollisionGroup)data.GetMemberInt("collisiongroup", 0));

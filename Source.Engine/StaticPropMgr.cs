@@ -62,6 +62,10 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 		[FieldOffset(12)] public float FalloffFactor;
 	}
 
+#if !SWDS
+	IEngineTrace engineTraceClient => field ??= KeyedSingleton<IEngineTrace>(Realm.Client);
+#endif
+
 	readonly List<StaticPropDict> StaticPropDictList = [];
 	readonly List<StaticProp> StaticProps = [];
 	readonly List<StaticPropLeafLump> StaticPropLeaves = [];
@@ -210,13 +214,54 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 		LastViewFactor = factor;
 	}
 
-	public void TraceRayAgainstStaticProp(Ray ray, int staticPropIndex, Trace tr) {
-		throw new NotImplementedException();
+	public void TraceRayAgainstStaticProp(in Ray ray, int staticPropIndex, ref Trace tr) {
+#if !SWDS
+		StaticProp prop = StaticProps[staticPropIndex];
+
+		if (prop.GetSolid() != SolidType.None) {
+			Ray temp = ray;
+			temp.Delta *= 1.1f;
+			engineTraceClient.ClipRayToEntity(in temp, Mask.All, prop, ref tr);
+		}
+		else {
+			tr.Fraction = 1.0f;
+		}
+#endif
 	}
 
-	public void AddDecalToStaticProp(Vector3 rayStart, Vector3 rayEnd, int staticPropIndex, int decalIndex, bool doTrace, Trace tr) {
-		// throw new NotImplementedException();
-		DevWarning("AddDecalToStaticProp not implemented\n");
+	public void AddDecalToStaticProp(in Vector3 rayStart, in Vector3 rayEnd, int staticPropIndex, int decalIndex, bool doTrace, ref Trace tr) {
+#if !SWDS
+		if (staticPropIndex >= StaticProps.Count) {
+			tr = default;
+			tr.Fraction = 1.0f;
+			return;
+		}
+
+		Ray ray = new();
+		ray.Init(in rayStart, in rayEnd);
+		if (doTrace) {
+			TraceRayAgainstStaticProp(in ray, staticPropIndex, ref tr);
+			if (tr.Fraction == 1.0f)
+				return;
+		}
+
+		if (r_drawmodeldecals.GetInt() == 0)
+			return;
+
+		StaticProp prop = StaticProps[staticPropIndex];
+
+		Assert(prop.GetModelInstance() != MODEL_INSTANCE_INVALID);
+
+		bool noPokethru = false;
+		if (doTrace && (prop.GetSolid() == SolidType.VPhysics) && !tr.StartSolid && !tr.AllSolid) {
+			MathLib.VectorSubtract(tr.EndPos, tr.Plane.Normal, out Vector3 temp);
+			ray.Init(in tr.EndPos, in temp);
+			noPokethru = true;
+		}
+
+		Vector3 up = new(0, 0, 1);
+		modelrender.AddDecal(prop.GetModelInstance(), in ray, in up, decalIndex, 0, noPokethru);
+#endif
 	}
 
 	public void AddColorDecalToStaticProp(Vector3 rayStart, Vector3 rayEnd, int staticPropIndex, int decalIndex, bool doTrace, Trace tr, bool useColor, Color color) {

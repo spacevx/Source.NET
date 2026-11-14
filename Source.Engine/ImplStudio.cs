@@ -275,32 +275,146 @@ public class ModelRender : IModelRender
 	}
 
 	public void DestroyInstance(ModelInstanceHandle_t modelInstance) {
-		// TODO
+		if (modelInstance == MODEL_INSTANCE_INVALID)
+			return;
+
+#if GMOD_DLL
+		if (!ModelInstances.ContainsKey(modelInstance))
+			return;
+#endif
+
+		StudioRender.DestroyDecalList(ModelInstances[modelInstance].DecalHandle);
+		// todo: g_ShadowMgr.RemoveAllShadowsFromModel(modelInstance)
 
 		// DestroyStaticPropColorData(modelInstance);
 		ModelInstances.Remove(modelInstance);
 	}
 
-	public void RemoveAllDecals(ModelInstanceHandle_t handle) {
-		if (!ModelInstances.TryGetValue(handle, out ModelInstance? instance))
+	public bool IsModelInstanceValid(ModelInstanceHandle_t handle) {
+		if (handle == MODEL_INSTANCE_INVALID)
+			return false;
+
+		ModelInstance inst = ModelInstances[handle];
+		if (inst.DecalHandle == STUDIORENDER_DECAL_INVALID)
+			return false;
+
+#if GMOD_DLL
+		if (inst.Renderable == null)
+			return false;
+#endif
+
+		Model? model = inst.Renderable!.GetModel();
+		return inst.Model == model;
+	}
+
+	public void AddDecal(ModelInstanceHandle_t handle, in Ray ray, in Vector3 decalUp, int decalIndex, int body, bool noPokeThru = false, int maxLODToDecal = IStudioRender.ADDDECAL_TO_ALL_LODS) {
+		if (handle == MODEL_INSTANCE_INVALID)
 			return;
 
-		if (instance.Model == null)
+		Render.DecalGetMaterialAndSize(decalIndex, out IMaterial? decalMaterial, out float w, out float h);
+		if (decalMaterial == null) {
+			DevWarning($"Bad decal index {decalIndex}\n");
 			return;
-
-		if (instance.DecalHandle != STUDIORENDER_DECAL_INVALID) {
-			// todo: studiorender.DestroyDecalList(instance.DecalHandle)
-			instance.DecalHandle = STUDIORENDER_DECAL_INVALID;
 		}
+		w *= 0.5f;
+		h *= 0.5f;
+
+		decalMaterial.FindVar("$decalFadeDuration", out bool found, false);
+		if (found)
+			return;
+
+		float radius = (w > h) ? w : h;
+
+		ModelInstance inst = ModelInstances[handle];
+		if (!IsModelInstanceValid(handle)) {
+			StudioRender.DestroyDecalList(inst.DecalHandle);
+			inst.DecalHandle = STUDIORENDER_DECAL_INVALID;
+		}
+
+		if (inst.DecalHandle == STUDIORENDER_DECAL_INVALID) {
+			StudioHWData? studioHWData = MDLCache.GetHardwareData(inst.Model!.Studio);
+			inst.DecalHandle = StudioRender.CreateDecalList(studioHWData);
+		}
+
+		Span<Matrix3x4> boneToWorld = SetupModelState(inst.Renderable!);
+		StudioRender.AddDecal(inst.DecalHandle, MDLCache.GetStudioHdr(inst.Model!.Studio)!, boneToWorld, in ray, in decalUp, decalMaterial, radius, body, noPokeThru, maxLODToDecal, 1.0f, 1.0f);
+	}
+
+#if GMOD_DLL
+	public void GMODAddDecal(ModelInstanceHandle_t handle, in Vector3 pos, in Vector3 dir, IMaterial? material, int body, float w, float h) {
+		if (handle == MODEL_INSTANCE_INVALID || material == null)
+			return;
+
+		Ray ray = new();
+		Vector3 end = pos - dir;
+		ray.Init(in pos, in end);
+
+		Vector3 up = new(0, 0, 1);
+
+		float scale = 1.0f;
+
+		IMaterialVar decalScaleVar = material.FindVar("$decalScale", out bool found, false);
+		if (found)
+			scale = decalScaleVar.GetFloatValue();
+
+		float halfW = material.GetMappingWidth() * scale * 0.5f;
+		float halfH = material.GetMappingHeight() * scale * 0.5f;
+
+		ModelInstance inst = ModelInstances[handle];
+		if (!IsModelInstanceValid(handle)) {
+			StudioRender.DestroyDecalList(inst.DecalHandle);
+			inst.DecalHandle = STUDIORENDER_DECAL_INVALID;
+		}
+
+		if (inst.DecalHandle == STUDIORENDER_DECAL_INVALID) {
+			StudioHWData? studioHWData = MDLCache.GetHardwareData(inst.Model!.Studio);
+			inst.DecalHandle = StudioRender.CreateDecalList(studioHWData);
+		}
+
+		float radius = (halfW > halfH) ? halfW : halfH;
+
+		Span<Matrix3x4> boneToWorld = SetupModelState(inst.Renderable!);
+		StudioRender.AddDecal(inst.DecalHandle, MDLCache.GetStudioHdr(inst.Model!.Studio)!, boneToWorld, in ray, in up, material, radius, body, true, IStudioRender.ADDDECAL_TO_ALL_LODS, w, h);
+	}
+#endif
+
+	public void RemoveAllDecals(ModelInstanceHandle_t handle) {
+		if (handle == MODEL_INSTANCE_INVALID)
+			return;
+
+		ModelInstance inst = ModelInstances[handle];
+		if (!IsModelInstanceValid(handle))
+			return;
+
+		StudioRender.DestroyDecalList(inst.DecalHandle);
+		inst.DecalHandle = STUDIORENDER_DECAL_INVALID;
 	}
 
 	public void RemoveAllDecalsFromAllModels() {
-		foreach (ModelInstanceHandle_t handle in ModelInstances.Keys)
-			RemoveAllDecals(handle);
+		foreach (ModelInstanceHandle_t i in ModelInstances.Keys)
+			RemoveAllDecals(i);
 	}
 
-	public ref Matrix4x4 SetupModelState(IClientRenderable renderable) {
-		throw new NotImplementedException(); // todo
+	public Span<Matrix3x4> SetupModelState(IClientRenderable renderable) {
+		Model? model = renderable.GetModel();
+		if (model == null)
+			return default;
+
+		StudioHeader studioHdr = MDLCache.GetStudioHdr(model.Studio)!;
+		if (studioHdr.NumBodyParts == 0)
+			return default;
+
+		Span<Matrix3x4> boneMatrices = default;
+#if !SWDS
+		int boneCount = studioHdr.NumBones;
+		boneMatrices = StudioRender.LockBoneMatrices(boneCount);
+
+		renderable.SetupBones(boneMatrices, boneCount, Studio.BONE_USED_BY_ANYTHING, cl.GetTime());
+
+		StudioRender.UnlockBoneMatrices();
+#endif
+
+		return boneMatrices;
 	}
 
 	public bool DrawModelSetup(ref ModelRenderInfo info, ref DrawModelState state, Span<Matrix3x4> customBoneToWorld, out Span<Matrix3x4> boneToWorldOut) {
@@ -355,6 +469,10 @@ public class ModelRender : IModelRender
 		}
 
 		boneToWorldOut = boneToWorld;
+
+		state.Decals = STUDIORENDER_DECAL_INVALID;
+		if (info.Instance != MODEL_INSTANCE_INVALID)
+			state.Decals = ModelInstances[info.Instance].DecalHandle;
 
 		state.DrawFlags = StudioRenderFlags.DrawEntireModel;
 		if ((info.Flags & StudioFlags.TwoPass) != 0) {
@@ -743,11 +861,17 @@ public class ModelRender : IModelRender
 		info.ClientEntity = state.Renderable;
 		info.Lod = state.LOD;
 		info.ColorMeshes = colorMeshes;
-
-		// TODO: decals
+		info.Decals = (bShadowDepth || bSSAODepth) ? STUDIORENDER_DECAL_INVALID : state.Decals;
 
 		// TODO: perf stats
 		StudioRenderFlags drawFlags = state.DrawFlags;
+
+#if GMOD_DLL
+		if ((pInfo.Flags & StudioFlags.SkipDecals) != 0)
+			drawFlags |= StudioRenderFlags.SkipDecals;
+		if ((pInfo.Flags & StudioFlags.SkipFlexes) != 0)
+			drawFlags |= StudioRenderFlags.DrawNoFlexes;
+#endif
 
 		if (bShadowDepth) {
 			drawFlags |= StudioRenderFlags.DrawOpaqueOnly;
@@ -780,6 +904,12 @@ public class ModelRender : IModelRender
 		public short Lod;
 		public ModelInstanceHandle_t Instance;
 		public short Skin;
+		public short LightIndex;
+	}
+
+	struct RDecalModel
+	{
+		public short ObjectIndex;
 		public short LightIndex;
 	}
 
@@ -819,6 +949,7 @@ public class ModelRender : IModelRender
 	readonly List<RObject> ObjectList = new(1024);
 	readonly List<RModel> ModelList = new(256);
 	readonly List<short> LightObjects = new(256);
+	readonly List<RDecalModel> DecalObjects = new(256);
 	readonly List<LightingState> LightStates = new(256);
 	Comparison<RObject>? ObjectLess;
 
@@ -829,6 +960,7 @@ public class ModelRender : IModelRender
 		ObjectList.Clear();
 		ModelList.Clear();
 		LightObjects.Clear();
+		DecalObjects.Clear();
 		LightStates.Clear();
 		bool forceCubemap = r_showenvcubemap.GetBool();
 		int drawnCount = 0;
@@ -908,7 +1040,17 @@ public class ModelRender : IModelRender
 				bool staticLighting = model.StaticLighting && obj.Instance != MODEL_INSTANCE_INVALID;
 				bool vertexLit = model.VertexLit;
 				bool needsEnvCubemap = forceCubemap || model.NeedsCubemap;
-				// todo: decal light states, shadow objects
+				bool hasDecals = obj.Instance != MODEL_INSTANCE_INVALID && ModelInstances[obj.Instance].DecalHandle != STUDIORENDER_DECAL_INVALID;
+				int decalLightIndex = -1;
+				if (hasDecals) {
+					RDecalModel decalModel;
+					decalModel.LightIndex = (short)LightStates.Count;
+					LightStates.Add(default);
+					decalLightIndex = decalModel.LightIndex;
+					decalModel.ObjectIndex = (short)i;
+					DecalObjects.Add(decalModel);
+				}
+				// todo: shadow objects
 
 				DataCacheHandle_t colorMeshHandle = 0;
 				if (staticLighting) {
@@ -952,6 +1094,13 @@ public class ModelRender : IModelRender
 							state = ref Render.LightcacheGetStatic(lightCache, out envCubemapTexture, LightCacheFlags.Dynamic | LightCacheFlags.LightStyle);
 							Assert(state.NumLights >= 0 && state.NumLights <= Render.MAXLOCALLIGHTS);
 						}
+						if (hasDecals) {
+							ref LightingState decalLightState = ref CollectionsMarshal.AsSpan(LightStates)[decalLightIndex];
+							for (int iCube = 0; iCube < 6; ++iCube)
+								decalLightState.BoxColor[iCube] = ModelInstances[obj.Instance].AmbientLightingState.BoxColor[iCube] + state.BoxColor[iCube];
+							decalLightState.CopyLocalLights(ModelInstances[obj.Instance].AmbientLightingState);
+							decalLightState.AddAllLocalLights(state);
+						}
 					}
 					else {
 						Vector3 lightingOrigin = obj.LightingOrigin;
@@ -962,6 +1111,12 @@ public class ModelRender : IModelRender
 							ref stats, lightCacheFlags, false);
 						Assert(lightingState.NumLights >= 0 && lightingState.NumLights <= Render.MAXLOCALLIGHTS);
 						state = ref lightingState;
+
+						if (hasDecals) {
+							LightcacheGetDynamic_Stats tempStats = default;
+							Render.LightcacheGetDynamic(lightingOrigin, ref CollectionsMarshal.AsSpan(LightStates)[decalLightIndex], ref tempStats,
+								LightCacheFlags.Static | LightCacheFlags.Dynamic | LightCacheFlags.LightStyle | LightCacheFlags.AllowFast);
+						}
 					}
 
 					if (needsEnvCubemap && envCubemapTexture != null)
@@ -1042,7 +1197,23 @@ public class ModelRender : IModelRender
 		}
 
 		// todo: shadow pass (DrawStaticPropShadows)
-		// todo: decal pass (DrawStaticPropDecals)
+
+		for (int i = 0; i < DecalObjects.Count; i++) {
+			ref RObject obj = ref objectList[DecalObjects[i].ObjectIndex];
+			ref RModel model = ref modelList[obj.ModelIndex];
+			ref LightingState state = ref CollectionsMarshal.AsSpan(LightStates)[DecalObjects[i].LightIndex];
+			StudioRender.SetAmbientLightColors(state.BoxColor);
+			renderContext.SetLightingOrigin(obj.LightingOrigin);
+			R_SetNonAmbientLightingState(state.NumLights, state.LocalLight, out localLightCount, localLightDescs, true);
+			info.StudioHdr = model.StudioHdr!;
+			info.HardwareData = model.StudioHWData!;
+			info.Decals = ModelInstances[obj.Instance].DecalHandle;
+			info.Skin = obj.Skin;
+			info.ClientEntity = obj.Renderable;
+			info.Lod = obj.Lod;
+			info.ColorMeshes = obj.ColorMeshes;
+			StudioRender.DrawStaticPropDecals(ref info, in obj.Matrix);
+		}
 
 		renderContext.MatrixMode(MaterialMatrixMode.Model);
 		renderContext.PopMatrix();
@@ -1264,7 +1435,7 @@ public class ModelRender : IModelRender
 	}
 
 	public const float CURRENT_LIGHTING_UNINITIALIZED = -999999.0f;
-	public const StudioDecalHandle_t STUDIORENDER_DECAL_INVALID = unchecked((StudioDecalHandle_t)~0);
+	public const StudioDecalHandle_t STUDIORENDER_DECAL_INVALID = IStudioRender.STUDIORENDER_DECAL_INVALID;
 	const float AMBIENT_MAX = 8.0f;
 
 	private void InitColormeshParams(ModelInstance instance, StudioHWData studioHWData, ref ColorMeshParams colorMeshParams) {

@@ -1,4 +1,5 @@
 ﻿using Source.Common.Formats.BSP;
+using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
 
 using System.Numerics;
@@ -20,6 +21,9 @@ public enum StudioRenderFlags
 	DrawWireframe = 0x80,
 	DrawItemBlink = 0x100,
 	ShadowDepthTexture = 0x200,
+#if GMOD_DLL
+	SkipDecals = 0x800,
+#endif
 	SSAODepthTexture = 0x1000,
 	GenerateStats = 0x8000,
 }
@@ -32,6 +36,7 @@ public struct DrawModelState
 	public Matrix3x4 ModelToWorld;
 	public StudioRenderFlags DrawFlags;
 	public int LOD;
+	public StudioDecalHandle_t Decals;
 }
 
 public struct ModelRenderInfo
@@ -65,6 +70,10 @@ public interface IModelRender
 {
 	ModelInstanceHandle_t CreateInstance(IClientRenderable renderable, LightCacheHandle_t? cache = null);
 	void DestroyInstance(ModelInstanceHandle_t modelInstance);
+	void AddDecal(ModelInstanceHandle_t handle, in Ray ray, in Vector3 decalUp, int decalIndex, int body, bool noPokeThru = false, int maxLODToDecal = IStudioRender.ADDDECAL_TO_ALL_LODS);
+#if GMOD_DLL
+	void GMODAddDecal(ModelInstanceHandle_t handle, in Vector3 pos, in Vector3 dir, IMaterial? material, int body, float w, float h);
+#endif
 	void RemoveAllDecals(ModelInstanceHandle_t handle);
 	void RemoveAllDecalsFromAllModels();
 	int DrawModel(StudioFlags flags, IClientRenderable? renderable, ModelInstanceHandle_t instance, int entityIndex, Model? model, in Vector3 origin, in QAngle angles, int skin, int body, int hitboxset, Matrix3x4? modelToWorld = null, Matrix3x4? lightingOffset = null);
@@ -75,7 +84,7 @@ public interface IModelRender
 	void SetupLighting(in Vector3 center);
 	void DrawModelExecute(ref DrawModelState state, ref ModelRenderInfo info, Span<Matrix3x4> boneToWorldArray);
 	bool DrawModelSetup(ref ModelRenderInfo info, ref DrawModelState state, Span<Matrix3x4> customBoneToWorld, out Span<Matrix3x4> boneToWorldArray);
-	ref Matrix4x4 SetupModelState(IClientRenderable renderable);
+	Span<Matrix3x4> SetupModelState(IClientRenderable renderable);
 	bool DrawModelShadowSetup(IClientRenderable renderable, int body, int skin, ref Source.Common.DrawModelInfo info, Span<Matrix3x4> customBoneToWorld, out Span<Matrix3x4> boneToWorldOut);
 	void DrawModelShadow(IClientRenderable renderable, in Source.Common.DrawModelInfo info, Span<Matrix3x4> boneToWorld);
 	void SuppressEngineLighting(bool suppress);

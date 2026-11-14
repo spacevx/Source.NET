@@ -1039,6 +1039,13 @@ public static partial class LuaEntity
 #endif
 
 	[LuaMethod]
+	static int Entity__RemoveAllDecals(ILuaInterface lua) {
+		BaseEntity ent = Get_Entity(1, false)!;
+		ent.RemoveAllDecals();
+		return 0;
+	}
+
+	[LuaMethod]
 	static int Entity__SetNoDraw(ILuaInterface lua) {
 		BaseEntity ent = Get_Entity(1, false)!;
 		if (lua.GetBool(2))

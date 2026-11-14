@@ -871,6 +871,12 @@ public partial class BaseEntity : IServerEntity
 
 	public void Remove() => Util.Remove(this);
 
+	public void RemoveAllDecals() {
+		GameInterface.EntityMessageBegin(this, false);
+		WRITE_BYTE(BASEENTITY_MSG_REMOVE_DECALS);
+		GameInterface.MessageEnd();
+	}
+
 	public void MakeDormant() {
 		AddEFlags(EFL.Dormant);
 		SetThink(null);

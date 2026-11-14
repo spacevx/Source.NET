@@ -832,6 +832,22 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 		studioRenderImp.DrawModelStaticProp(ref info, RC, in modelToWorld, flags);
 	}
 
+	public void DrawStaticPropDecals(ref DrawModelInfo info, in Matrix3x4 modelToWorld) {
+		studioRenderImp.DrawStaticPropDecals(ref info, RC, in modelToWorld);
+	}
+
+	public StudioDecalHandle_t CreateDecalList(StudioHWData? hardwareData) {
+		return studioRenderImp.CreateDecalList(hardwareData);
+	}
+
+	public void DestroyDecalList(StudioDecalHandle_t handle) {
+		studioRenderImp.DestroyDecalList(handle);
+	}
+
+	public void AddDecal(StudioDecalHandle_t handle, StudioHeader studioHdr, Span<Matrix3x4> boneToWorld, in Ray ray, in Vector3 decalUp, IMaterial decalMaterial, float radius, int body, bool noPokethru = false, int maxLODToDecal = IStudioRender.ADDDECAL_TO_ALL_LODS, float w = 1.0f, float h = 1.0f) {
+		studioRenderImp.AddDecal(handle, RC, boneToWorld, studioHdr, in ray.Start, in ray.Delta, in decalUp, decalMaterial, radius, body, noPokethru, maxLODToDecal, w, h);
+	}
+
 	private void InvokeBindProxies(ref DrawModelInfo info) {
 		if (RC.ForcedMaterial != null) {
 			if (RC.ForcedMaterialType == OverrideType.Normal && RC.ForcedMaterial.HasProxy()) {
@@ -998,7 +1014,7 @@ public class StudioRenderContext(IMaterialSystem materialSystem, IStudioDataCach
 		StudioRender.R_LightAmbient_3D(in normal, ambient, out lighting);
 	}
 
-	private static int CopyLocalLightingState(int maxLights, Span<LightDesc> dest, int lightCount, ReadOnlySpan<LightDesc> src) {
+	internal static int CopyLocalLightingState(int maxLights, Span<LightDesc> dest, int lightCount, ReadOnlySpan<LightDesc> src) {
 		if (lightCount > maxLights)
 			lightCount = maxLights;
 

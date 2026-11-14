@@ -960,7 +960,7 @@ public unsafe struct MeshBuilder : IDisposable
 	public ReadOnlySpan<float> BoneWeight() => throw new NotImplementedException();
 	public ReadOnlySpan<float> Wrinkle() => throw new NotImplementedException();
 
-	public int NumBoneWeights() => throw new NotImplementedException();
+	public int NumBoneWeights() => VertexBuilder.Desc.NumBoneWeights;
 
 	public ReadOnlySpan<byte> BoneMatrix() => throw new NotImplementedException();
 	public ReadOnlySpan<ushort> Index() => throw new NotImplementedException();

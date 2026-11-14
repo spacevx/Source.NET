@@ -633,8 +633,12 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 		cl.NetChannel.SendNetMsg(msg);
 	}
 
-	public void GMOD_PlaceDecalMaterial(IMaterial material, bool unk1, int unk2, IClientEntity ent, in Vector3 origin, in Vector3 normal, in Color color, float unk3, float unk4) {
-		throw new NotImplementedException();
+	public void GMOD_PlaceDecalMaterial(IMaterial material, bool isBrushModel, int entityIndex, IClientEntity ent, in Vector3 position, in Vector3 sAxis, in Color color, float wScale, float hScale) {
+		if (!isBrushModel)
+			return;
+
+		Model? model = ent.GetModel();
+		Render.DecalShoot_(material, entityIndex, model, in position, sAxis, 0, in color, null, null, wScale, hScale);
 	}
 
 	public void GMOD_GetSpew(Span<char> spewBuffer) {
@@ -668,7 +672,7 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 	}
 
 	public void GMOD_DecalRemoveEntity(int index) {
-		throw new NotImplementedException();
+		Render.GMOD_DecalRemoveEntity(index);
 	}
 
 	public ReadOnlySpan<char> GMOD_TranslateAlias(ReadOnlySpan<char> cmd) {

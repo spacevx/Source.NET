@@ -470,7 +470,7 @@ public interface IEngineClient
 
 	void GMOD_SetTimeManipulator(float scaleFramerate);
 	void GMOD_SendToServer(ReadOnlySpan<byte> data, int dataBits, bool reliable);
-	void GMOD_PlaceDecalMaterial(IMaterial material, bool unk1, int unk2, IClientEntity ent, in Vector3 origin /*?*/, in Vector3 normal /*?*/, in Color color, float unk3, float unk4);
+	void GMOD_PlaceDecalMaterial(IMaterial material, bool isBrushModel, int entityIndex, IClientEntity ent, in Vector3 position, in Vector3 sAxis, in Color color, float wScale, float hScale);
 	void GMOD_GetSpew(Span<char> spewBuffer);
 	void GMOD_SetViewEntity(BaseHandle entity);
 	void GMOD_BrushMaterialOverride(IMaterial? matOverride);

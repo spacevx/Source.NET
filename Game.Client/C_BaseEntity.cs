@@ -1185,6 +1185,7 @@ public partial class C_BaseEntity : IClientEntity
 	public CollisionProperty CollisionProp() => Collision;
 
 	static readonly ConVar r_drawrenderboxes = new("r_drawrenderboxes", "0", FCvar.Cheat);
+	static readonly ConVar r_drawmodeldecals = new("r_drawmodeldecals", "1", 0);
 
 #if DEBUG
 	internal static readonly ConVar sdn_entdebug = new("sdn_entdebug", "0");
@@ -2694,8 +2695,39 @@ public partial class C_BaseEntity : IClientEntity
 		}
 	}
 
-	private void RemoveAllDecals() {
+	public bool IsBrushModel() {
+		ModelType modelType = modelinfo.GetModelType(Model);
+		return modelType == ModelType.Brush;
+	}
 
+	public static C_BaseEntity? FindEntityInFrontOfLocalPlayer() {
+		C_BasePlayer? player = C_BasePlayer.GetLocalPlayer();
+		if (player != null) {
+			player.EyeVectors(out Vector3 forward, out _, out _);
+			Util.TraceLine(player.EyePosition(), player.EyePosition() + forward * MAX_COORD_RANGE, Mask.Solid, player, Source.CollisionGroup.None, out Trace tr);
+			if (tr.Fraction != 1.0f && tr.DidHitNonWorldEntity())
+				return tr.Ent;
+		}
+		return null;
+	}
+
+	[ConCommand("cl_removedecals", "Remove the decals from the entity under the crosshair.", FCvar.Cheat)]
+	static void RemoveDecals_f() {
+		C_BaseEntity? hit = FindEntityInFrontOfLocalPlayer();
+		if (hit != null)
+			hit.RemoveAllDecals();
+	}
+
+	public void RemoveAllDecals() {
+		if (modelinfo.GetModelType(Model) == ModelType.Studio) {
+			CreateModelInstance();
+			modelrender.RemoveAllDecals(ModelInstance);
+		}
+#if GMOD_DLL
+		else if (modelinfo.GetModelType(Model) == ModelType.Brush) {
+			engine.GMOD_DecalRemoveEntity(EntIndex());
+		}
+#endif
 	}
 
 	public bool DestroyedOnRecreateEntities;
@@ -3118,9 +3150,34 @@ public partial class C_BaseEntity : IClientEntity
 		}
 	}
 
-	public virtual void AddStudioDecal(in Ray ray, int hitbox, int decalIndex, bool doTrace, ref Trace tr, int maxLODToDecal = -1) {
-		// throw new NotImplementedException();
-		DevWarning("AddStudioDecal not implemented\n");
+	public virtual int GetStudioBody() => 0;
+
+	public virtual void AddStudioDecal(in Ray ray, int hitbox, int decalIndex, bool doTrace, ref Trace tr, int maxLODToDecal = IStudioRender.ADDDECAL_TO_ALL_LODS) {
+		if (doTrace) {
+			enginetrace.ClipRayToEntity(in ray, Mask.Shot, this, ref tr);
+
+			if (tr.Fraction == 1.0f)
+				return;
+
+			tr.Ent = this;
+		}
+
+		if (!r_drawmodeldecals.GetBool())
+			return;
+
+		CreateModelInstance();
+
+		Vector3 up = new(0, 0, 1);
+
+		if (doTrace && (GetSolid() == SolidType.VPhysics) && !tr.StartSolid && !tr.AllSolid) {
+			MathLib.VectorSubtract(tr.EndPos, tr.Plane.Normal, out Vector3 temp);
+			Ray betterRay = new();
+			betterRay.Init(in tr.EndPos, in temp);
+			modelrender.AddDecal(ModelInstance, in betterRay, in up, decalIndex, GetStudioBody(), true, maxLODToDecal);
+		}
+		else {
+			modelrender.AddDecal(ModelInstance, in ray, in up, decalIndex, GetStudioBody(), false, maxLODToDecal);
+		}
 	}
 
 	public virtual void AddBrushModelDecal(in Ray ray, in Vector3 decalCenter, int decalIndex, bool doTrace, ref Trace tr) {
@@ -3133,7 +3190,7 @@ public partial class C_BaseEntity : IClientEntity
 		effects.DecalShoot(decalIndex, Index, Model, GetAbsOrigin(), GetAbsAngles(), decalCenter, null, 0);
 	}
 
-	public void AddDecal(in Vector3 rayStart, in Vector3 rayEnd, in Vector3 decalCenter, int hitbox, int decalIndex, bool doTrace, ref Trace tr, int maxLODToDecal = -1) {
+	public void AddDecal(in Vector3 rayStart, in Vector3 rayEnd, in Vector3 decalCenter, int hitbox, int decalIndex, bool doTrace, ref Trace tr, int maxLODToDecal = IStudioRender.ADDDECAL_TO_ALL_LODS) {
 		Ray ray = new();
 		ray.Init(in rayStart, in rayEnd);
 		ray.Delta *= 1.1f;

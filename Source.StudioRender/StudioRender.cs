@@ -50,7 +50,7 @@ public struct EyeballState
 }
 
 [EngineComponent]
-public unsafe class StudioRender
+public unsafe partial class StudioRender
 {
 	IMaterialSystem materialSystem = Singleton<IMaterialSystem>();
 	IStudioDataCache studioDataCache = Singleton<IStudioDataCache>();
@@ -65,6 +65,11 @@ public unsafe class StudioRender
 	StudioMeshData[]? StudioMeshes;
 
 	readonly CachedRenderData VertexCache = new();
+#if GMOD_DLL
+	static int s_FlexVertsWarnings;
+	static int s_EyeballWarnings;
+	static int s_StreamOffsetWarnings;
+#endif
 
 	public readonly Matrix3x4[] PoseToWorld = new Matrix3x4[Studio.MAXSTUDIOBONES];
 	public readonly Matrix3x4[] PoseToDecal = new Matrix3x4[Studio.MAXSTUDIOBONES];
@@ -111,7 +116,17 @@ public unsafe class StudioRender
 				info.HardwareData.LODs[info.Lod].Materials,
 				info.HardwareData.LODs[info.Lod].MaterialFlags, flags, boneMask, info.Lod, info.ColorMeshes);
 
-			// TODO: decals
+			if (StudioMeshes != null && (flags & (StudioRenderFlags.ShadowDepthTexture | StudioRenderFlags.SSAODepthTexture)) == 0) {
+#if GMOD_DLL
+				// todo: also skipped when the render context has mesh overrides (GMOD_MeshOverrideCount)
+				if ((flags & StudioRenderFlags.SkipDecals) == 0 && (flags & StudioRenderFlags.DrawGroupMask) != StudioRenderFlags.DrawTranslucentOnly)
+#else
+				if ((flags & StudioRenderFlags.DrawGroupMask) != StudioRenderFlags.DrawTranslucentOnly)
+#endif
+					DrawDecal(ref info, info.Lod, info.Body);
+
+				// todo: DrawShadows, DrawFlashlightDecals
+			}
 
 			// Restore the matrices if we're skinning
 			pRenderContext.MatrixMode(MaterialMatrixMode.Model);
@@ -157,7 +172,16 @@ public unsafe class StudioRender
 				info.HardwareData.LODs[lod].Materials,
 				info.HardwareData.LODs[lod].MaterialFlags, flags, Studio.BONE_USED_BY_ANYTHING, lod, info.ColorMeshes);
 
-			// TODO: decals, shadows, flashlight decals
+			if ((flags & (StudioRenderFlags.ShadowDepthTexture | StudioRenderFlags.SSAODepthTexture)) == 0) {
+#if GMOD_DLL
+				if ((flags & StudioRenderFlags.SkipDecals) == 0 && (flags & StudioRenderFlags.DrawGroupMask) != StudioRenderFlags.DrawTranslucentOnly)
+#else
+				if ((flags & StudioRenderFlags.DrawGroupMask) != StudioRenderFlags.DrawTranslucentOnly)
+#endif
+					DrawDecal(ref info, lod, info.Body);
+
+				// todo: DrawShadows, DrawFlashlightDecals
+			}
 
 			pRC.Config.Flex = flexConfig;
 			pRC.Config.Wireframe = wireframe;
@@ -326,7 +350,17 @@ public unsafe class StudioRender
 
 		bool hasTangentS = vertData.HasTangentData();
 
+#if GMOD_DLL
+		if (!VertexCache.SetupComputation(mesh, true)) {
+			if (s_FlexVertsWarnings <= 9) {
+				Warning($"Could not process flex for model '{StudioHdr!.GetName()}' (it has > 65536 vertices)\n");
+				++s_FlexVertsWarnings;
+			}
+			return;
+		}
+#else
 		VertexCache.SetupComputation(mesh, true);
+#endif
 
 		int i, j, n;
 
@@ -881,7 +915,17 @@ public unsafe class StudioRender
 		}
 
 		renderContext.SetNumBoneWeights(0);
+#if GMOD_DLL
+		if (!VertexCache.SetupComputation(pmesh)) {
+			if (s_EyeballWarnings <= 9) {
+				Warning($"Could not process flex for model '{StudioHdr!.GetName()}' (it has > 65536 vertices)\n");
+				++s_EyeballWarnings;
+			}
+			return 0;
+		}
+#else
 		VertexCache.SetupComputation(pmesh);
+#endif
 
 		int alphaInt = MathLib.RoundFloatToInt(pRC.AlphaMod * 255);
 		byte a = (byte)Math.Clamp(alphaInt, 0, 255);
@@ -1370,7 +1414,17 @@ public unsafe class StudioRender
 			return;
 
 		int vertCount = mesh.VertexData.NumLODVertexes[lod];
+#if GMOD_DLL
+		if (!VertexCache.SetupComputation(mesh, true)) {
+			if (s_StreamOffsetWarnings <= 9) {
+				Warning($"Could not process flex for model '{StudioHdr!.GetName()}' (it has > 65536 vertices)\n");
+				++s_StreamOffsetWarnings;
+			}
+			return;
+		}
+#else
 		VertexCache.SetupComputation(mesh, true);
+#endif
 
 		for (int i = 0; i < mesh.NumFlexes; i++) {
 			MStudioFlex flex = mesh.Flex(i);

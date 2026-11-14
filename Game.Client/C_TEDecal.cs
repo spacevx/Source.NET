@@ -42,7 +42,7 @@ public static partial class TempEnts
 		if (entity == 0 && hitbox != 0) {
 			Ray ray = new();
 			ray.Init(in start, in pos);
-			StaticPropMgrGlobals.g_StaticPropMgr.AddDecalToStaticProp(start, pos, hitbox - 1, index, false, tr);
+			StaticPropMgrGlobals.g_StaticPropMgr.AddDecalToStaticProp(in start, in pos, hitbox - 1, index, false, ref tr);
 		}
 		else {
 			C_BaseEntity? ent = cl_entitylist.GetEnt(entity);

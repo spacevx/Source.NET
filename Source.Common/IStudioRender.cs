@@ -41,6 +41,7 @@ public struct DrawModelInfo {
 	public object? ClientEntity;
 	public int Lod;
 	public ColorMeshInfo[]? ColorMeshes;
+	public StudioDecalHandle_t Decals;
 	public bool StaticLighting;
 	public InlineArray6<Vector3> AmbientCube;
 	public int NumLocalLights;
@@ -116,6 +117,9 @@ public struct DrawModelResults {
 }
 
 public interface IStudioRender {
+	public const StudioDecalHandle_t STUDIORENDER_DECAL_INVALID = 0;
+	public const int ADDDECAL_TO_ALL_LODS = -1;
+
 	void BeginFrame();
 	void EndFrame();
 	void UpdateConfig(in StudioRenderConfig config);
@@ -132,6 +136,10 @@ public interface IStudioRender {
 	void UnlockFlexWeights();
 	void DrawModel(ref DrawModelResults results, ref DrawModelInfo info, Span<Matrix3x4> boneToWorld, Span<float> flexWeights, Span<float> flexDelayedWeights, in Vector3 modelOrigin, StudioRenderFlags flags = StudioRenderFlags.DrawEntireModel);
 	void DrawModelStaticProp(ref DrawModelInfo drawInfo, in Matrix3x4 modelToWorld, StudioRenderFlags flags = StudioRenderFlags.DrawEntireModel);
+	void DrawStaticPropDecals(ref DrawModelInfo drawInfo, in Matrix3x4 modelToWorld);
+	StudioDecalHandle_t CreateDecalList(StudioHWData? hardwareData);
+	void DestroyDecalList(StudioDecalHandle_t handle);
+	void AddDecal(StudioDecalHandle_t handle, StudioHeader studioHdr, Span<Matrix3x4> boneToWorld, in Ray ray, in Vector3 decalUp, IMaterial decalMaterial, float radius, int body, bool noPokethru = false, int maxLODToDecal = ADDDECAL_TO_ALL_LODS, float w = 1.0f, float h = 1.0f);
 	void SetViewState(in Vector3 currentViewOrigin, in Vector3 currentViewRight, in Vector3 currentViewUp, in Vector3 currentViewForward);
 	void SetColorModulation(Vector3 r_colormod);
 	void SetAlphaModulation(float r_blend);

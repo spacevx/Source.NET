@@ -227,6 +227,12 @@ public partial class Render
 		else {
 			decalWorldScale[0] = decal.Scale / material.GetMappingWidth();
 			decalWorldScale[1] = decal.Scale / material.GetMappingHeight();
+#if GMOD_DLL
+			if (decal.WScale > 0.0f)
+				decalWorldScale[0] /= decal.WScale;
+			if (decal.HScale > 0.0f)
+				decalWorldScale[1] /= decal.HScale;
+#endif
 		}
 
 		MathLib.VectorScale(textureSpaceBasis[0], decalWorldScale[0], out textureSpaceBasis[0]);

@@ -9,7 +9,7 @@ public interface IStaticPropMgr
 {
 	void CreateVPhysicsRepresentations(IPhysicsEnvironment physenv, IVPhysicsKeyHandler defaults, object? gameData);
 
-	void TraceRayAgainstStaticProp(Ray ray, int staticPropIndex, Trace tr);
+	void TraceRayAgainstStaticProp(in Ray ray, int staticPropIndex, ref Trace tr);
 
 	bool IsStaticProp(IHandleEntity handleEntity);
 	bool IsStaticProp(in BaseHandle handle);
@@ -19,7 +19,7 @@ public interface IStaticPropMgr
 public interface IStaticPropMgrClient : IStaticPropMgr
 {
 	void ComputePropOpacity(Vector3 viewOrigin, float factor);
-	void AddDecalToStaticProp(Vector3 rayStart, Vector3 rayEnd, int staticPropIndex, int decalIndex, bool doTrace, GameTrace tr);
+	void AddDecalToStaticProp(in Vector3 rayStart, in Vector3 rayEnd, int staticPropIndex, int decalIndex, bool doTrace, ref Trace tr);
 	void AddShadowToStaticProp(ushort shadowHandle, IClientRenderable renderable);
 	void RemoveAllShadowsFromStaticProp(IClientRenderable renderable);
 	void GetStaticPropMaterialColorAndLighting(GameTrace trace, int staticPropIndex, out Vector3 lighting, out Vector3 matColor);

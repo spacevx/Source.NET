@@ -1641,6 +1641,7 @@ public partial class C_BaseAnimating : C_BaseEntity, IModelLoadCallback
 	public float GetModelScale() => ModelScale;
 
 	public override int GetBody() => Body;
+	public override int GetStudioBody() => Body;
 	public override int GetSkin() => Skin;
 
 	public int InternalDrawModel(StudioFlags flags) {

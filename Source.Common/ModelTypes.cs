@@ -13,8 +13,14 @@ public enum StudioFlags : uint
 	NoShadows = 0x00000080,
 	WireframeVCollide = 0x00000100,
 	NoOverrideForAttach = 0x00000200,
+#if GMOD_DLL
+	SkipFlexes = 0x00000400,
+#endif
 	GenerateStats = 0x01000000,
 	SSAODepthTexture = 0x08000000,
+#if GMOD_DLL
+	SkipDecals = 0x10000000,
+#endif
 	ShadowDepthTexture = 0x40000000,
 	Transparency = 0x80000000
 }
