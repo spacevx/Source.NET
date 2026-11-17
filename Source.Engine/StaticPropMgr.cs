@@ -298,15 +298,130 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 	}
 
 	public void GetAllStaticProps(List<ICollideable> output) {
-		throw new NotImplementedException();
+		if (output == null)
+			return;
+
+		int propVectorSize = StaticProps.Count;
+		for (int counter = 0; counter != propVectorSize; ++counter)
+			output.Add(StaticProps[counter]);
 	}
 
 	public void GetAllStaticPropsInAABB(Vector3 mins, Vector3 maxs, List<ICollideable> output) {
-		throw new NotImplementedException();
+		if (output == null)
+			return;
+
+		int propVectorSize = StaticProps.Count;
+		for (int counter = 0; counter != propVectorSize; ++counter) {
+			StaticProp prop = StaticProps[counter];
+
+			prop.WorldSpaceSurroundingBounds(out Vector3 propMins, out Vector3 propMaxs);
+
+			if (propMaxs.X < mins.X) continue;
+			if (propMaxs.Y < mins.Y) continue;
+			if (propMaxs.Z < mins.Z) continue;
+
+			if (propMins.X > maxs.X) continue;
+			if (propMins.Y > maxs.Y) continue;
+			if (propMins.Z > maxs.Z) continue;
+
+			output.Add(prop);
+		}
 	}
 
 	public void GetAllStaticPropsInOBB(Vector3 origin, Vector3 extent1, Vector3 extent2, Vector3 extent3, List<ICollideable> output) {
-		throw new NotImplementedException();
+		if (output == null)
+			return;
+
+		int counter;
+
+		Vector3 aabbMins = origin;
+		Vector3 aabbMaxs = origin;
+
+		Span<Vector3> obbExtents = stackalloc Vector3[8];
+		for (counter = 0; counter != 8; ++counter) {
+			obbExtents[counter] = origin;
+			if ((counter & (1 << 0)) != 0) obbExtents[counter] += extent1;
+			if ((counter & (1 << 1)) != 0) obbExtents[counter] += extent2;
+			if ((counter & (1 << 2)) != 0) obbExtents[counter] += extent3;
+
+			//expand AABB extents
+			if (obbExtents[counter].X < aabbMins.X) aabbMins.X = obbExtents[counter].X;
+			if (obbExtents[counter].X > aabbMaxs.X) aabbMaxs.X = obbExtents[counter].X;
+			if (obbExtents[counter].Y < aabbMins.Y) aabbMins.Y = obbExtents[counter].Y;
+			if (obbExtents[counter].Y > aabbMaxs.Y) aabbMaxs.Y = obbExtents[counter].Y;
+			if (obbExtents[counter].Z < aabbMins.Z) aabbMins.Z = obbExtents[counter].Z;
+			if (obbExtents[counter].Z > aabbMaxs.Z) aabbMaxs.Z = obbExtents[counter].Z;
+		}
+
+		//generate planes for the obb so we can use halfspace elimination
+		Span<Vector3> obbPlaneNormals = stackalloc Vector3[6];
+		Span<float> obbPlaneDists = stackalloc float[6];
+
+		obbPlaneNormals[0] = extent1;
+		MathLib.VectorNormalize(ref obbPlaneNormals[0]);
+		obbPlaneDists[0] = Vector3.Dot(obbPlaneNormals[0], origin + extent1);
+		obbPlaneNormals[1] = -obbPlaneNormals[0];
+		obbPlaneDists[1] = Vector3.Dot(obbPlaneNormals[1], origin);
+
+		obbPlaneNormals[2] = extent2;
+		MathLib.VectorNormalize(ref obbPlaneNormals[2]);
+		obbPlaneDists[2] = Vector3.Dot(obbPlaneNormals[2], origin + extent2);
+		obbPlaneNormals[3] = -obbPlaneNormals[2];
+		obbPlaneDists[3] = Vector3.Dot(obbPlaneNormals[3], origin);
+
+		obbPlaneNormals[4] = extent3;
+		MathLib.VectorNormalize(ref obbPlaneNormals[4]);
+		obbPlaneDists[4] = Vector3.Dot(obbPlaneNormals[4], origin + extent3);
+		obbPlaneNormals[5] = -obbPlaneNormals[4];
+		obbPlaneDists[5] = Vector3.Dot(obbPlaneNormals[5], origin);
+
+		Span<Vector3> propExtents = stackalloc Vector3[8];
+		int propVectorSize = StaticProps.Count;
+		for (counter = 0; counter != propVectorSize; ++counter) {
+			StaticProp prop = StaticProps[counter];
+
+			prop.WorldSpaceSurroundingBounds(out Vector3 propMins, out Vector3 propMaxs);
+
+			if (propMaxs.X < aabbMins.X) continue;
+			if (propMaxs.Y < aabbMins.Y) continue;
+			if (propMaxs.Z < aabbMins.Z) continue;
+
+			if (propMins.X > aabbMaxs.X) continue;
+			if (propMins.Y > aabbMaxs.Y) continue;
+			if (propMins.Z > aabbMaxs.Z) continue;
+
+			//static prop AABB and desired AABB intersect, do OBB tests
+
+			Vector3 propOBBMins = prop.OBBMins();
+			Vector3 propOBBMaxs = prop.OBBMaxs();
+
+			MathLib.AngleMatrix(in prop.GetCollisionAngles(), in prop.GetCollisionOrigin(), out Matrix3x4 propWorld);
+
+			int counter2, counter3;
+			for (counter2 = 0; counter2 != 8; ++counter2) {
+				Vector3 temp;
+				temp.X = (counter2 & (1 << 0)) != 0 ? propOBBMaxs.X : propOBBMins.X;
+				temp.Y = (counter2 & (1 << 1)) != 0 ? propOBBMaxs.Y : propOBBMins.Y;
+				temp.Z = (counter2 & (1 << 2)) != 0 ? propOBBMaxs.Z : propOBBMins.Z;
+
+				MathLib.VectorTransform(in temp, in propWorld, out propExtents[counter2]);
+			}
+
+			for (counter2 = 0; counter2 != 6; ++counter2) { //loop over OBB planes
+				for (counter3 = 0; counter3 != 8; ++counter3) { //loop over prop extents
+					if ((Vector3.Dot(propExtents[counter3], obbPlaneNormals[counter2]) - obbPlaneDists[counter2]) < 0.0f) {
+						//an extent of the prop is within the OBB halfspace, this halfspace does not eliminate our prop, move to the next halfspace
+						break;
+					}
+				}
+				if (counter3 == 8) break; //if all 8 extents lie outside the halfspace, then the prop is not in the OBB
+			}
+
+			if (counter2 == 6) {
+				//if all 6 planes failed to eliminate the extents, the OBB and prop intersect
+				output.Add(prop);
+			}
+		}
 	}
 
 	public bool PropHasBakedLightingDisabled(IHandleEntity? handleEntity) {
