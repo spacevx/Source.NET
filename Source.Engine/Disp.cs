@@ -1,6 +1,7 @@
 ﻿global using static Source.Engine.Disp;
 
 using Source.Common;
+using Source.Common.Formats.BSP;
 using Source.Common.MaterialSystem;
 
 using System.Numerics;
@@ -23,6 +24,19 @@ public static class Disp
 	public static readonly List<byte> g_DispLMAlpha = [];
 	public static readonly List<byte> g_DispLightmapSamplePositions = [];
 	public static readonly List<DispGroup> g_DispGroups = [];
+}
+
+class DecalNodeSetupCache
+{
+	public readonly Vector3[] ProjectedVert = new Vector3[BSPFileCommon.MAX_DISPVERTS];
+	public readonly int[] CacheIndex = new int[BSPFileCommon.MAX_DISPVERTS];
+
+	public bool IsCached(int v) => CacheIndex[v] == CurrentCacheIndex;
+	public void MarkCached(int v) => CacheIndex[v] = CurrentCacheIndex;
+
+	public void ResetCache() => ++CurrentCacheIndex;
+
+	int CurrentCacheIndex;
 }
 
 public class DispArray(nint elements)
@@ -109,6 +123,15 @@ public struct DispDecal
 	public InlineArray3<Vector3> TextureSpaceBasis;
 	public float Size;
 	public DispDecalFragmentHandle FirstFragment;
+}
+
+public struct DispDecalFragment
+{
+	public const int MAX_VERTS = 6;
+
+	public Decal? Decal;
+	public byte NVerts;
+	public DecalVert[]? Verts;
 }
 
 public struct DispShadowDecal

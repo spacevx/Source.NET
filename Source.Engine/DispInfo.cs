@@ -8,6 +8,7 @@ using Source.Common.MaterialSystem;
 using Source.Common.Mathematics;
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Source.Engine;
@@ -73,8 +74,8 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 
 	bool InUse;
 
-	DispDecalHandle FirstDecal;
-	DispShadowHandle FirstShadowDecal;
+	DispDecalHandle FirstDecal = DISP_DECAL_HANDLE_INVALID;
+	DispShadowHandle FirstShadowDecal = DISP_SHADOW_HANDLE_INVALID;
 
 	public ushort Index;
 
@@ -87,6 +88,9 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 	static readonly PooledLinkedList<DispShadowDecal> s_DispShadowDecals = new();
 	static readonly PooledLinkedList<DispShadowFragment> s_DispShadowFragments = new();
 	static readonly PooledLinkedList<DispDecal> s_DispDecals = new();
+	static readonly PooledLinkedList<DispDecalFragment> s_DispDecalFragments = new();
+
+	static readonly DecalNodeSetupCache s_DecalNodeSetupCache = new();
 
 	public void GetIntersectingSurfaces(GetIntersectingSurfaces_Struct pStruct) => throw new NotImplementedException();
 	public void RenderWireframeInLightmapPage(int pageId) => throw new NotImplementedException();
@@ -127,7 +131,8 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 				Engine.Render.DecalUnlink(s_DispDecals[lastDecal].Decal, host_state.WorldBrush);
 #endif
 
-			s_DispDecals.LinkBefore(FirstDecal, h);
+			if (FirstDecal != DISP_DECAL_HANDLE_INVALID)
+				s_DispDecals.LinkBefore(FirstDecal, h);
 			FirstDecal = h;
 
 			ref DispDecal dispDecal = ref s_DispDecals[h];
@@ -140,14 +145,21 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 			Span<DecalVert> outVerts = default;
 			Engine.Render.SetupDecalClip(outVerts, dispDecal.Decal!, ref ModelLoader.MSurf_Plane(ref ParentSurfID).Normal, dispDecal.Decal!.Material!, dispDecal.TextureSpaceBasis, dispDecal.DecalWorldScale);
 
-			SetupDecalNodeIntersect(PowerInfo!.RootNode, 0, ref dispDecal, 0);
+			SetupDecalNodeIntersect(PowerInfo!.RootNode, 0, ref dispDecal.Base, ref dispDecal, ref Unsafe.NullRef<ShadowInfo_t>());
 		}
 
 		return h;
 	}
 
-	public void SetupDecalNodeIntersect(VertIndex nodeIndex, int nodeBitIndex, ref DispDecal dispDecal, int level) => throw new NotImplementedException();
-	public void NotifyRemoveDecal(DispDecalHandle h) => throw new NotImplementedException();
+	public void NotifyRemoveDecal(DispDecalHandle h) {
+		ClearDecalFragments(h);
+
+		if (FirstDecal == h)
+			FirstDecal = unchecked((DispDecalHandle)s_DispDecals.Next(h));
+
+		s_DispDecals.Remove(h);
+	}
+
 	public DispShadowHandle AddShadowDecal(ShadowHandle_t shadowHandle) {
 		DispShadowHandle h = unchecked((DispShadowHandle)s_DispShadowDecals.Alloc());
 		if (FirstShadowDecal != DISP_SHADOW_HANDLE_INVALID)
@@ -155,6 +167,7 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 		FirstShadowDecal = h;
 
 		ref DispShadowDecal shadowDecal = ref s_DispShadowDecals[h];
+		shadowDecal.Base.Flags = DecalFlags.DecalShadow;
 		shadowDecal.Base.NTris = 0;
 		shadowDecal.Base.NVerts = 0;
 		shadowDecal.Shadow = shadowHandle;
@@ -171,7 +184,38 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 		s_DispShadowDecals.Remove(handle);
 	}
 
-	public bool ComputeShadowFragments(DispShadowHandle h, out int vertexCount, out int indexCount) => throw new NotImplementedException();
+	public bool ComputeShadowFragments(DispShadowHandle h, out int vertexCount, out int indexCount) {
+		ref DispShadowDecal shadowDecal = ref s_DispShadowDecals[h];
+
+		if ((shadowDecal.Base.Flags & DecalFlags.FragmentsComputed) != 0) {
+			vertexCount = shadowDecal.Base.NVerts;
+			indexCount = 3 * shadowDecal.Base.NTris;
+			return true;
+		}
+
+#if !SWDS
+		if ((shadowDecal.Base.Flags & DecalFlags.NodeBitfieldComputed) == 0) {
+			ref readonly ShadowInfo_t info = ref g_ShadowMgr.GetInfo(shadowDecal.Shadow);
+			SetupDecalNodeIntersect(PowerInfo!.RootNode, 0, ref shadowDecal.Base, ref Unsafe.NullRef<DispDecal>(), in info);
+		}
+#endif
+
+		if ((shadowDecal.Base.Flags & DecalFlags.NoIntersection) != 0) {
+			vertexCount = 0;
+			indexCount = 0;
+			return false;
+		}
+
+		Assert(shadowDecal.Base.NTris == 0);
+		Assert(shadowDecal.FirstFragment == DISP_SHADOW_FRAGMENT_HANDLE_INVALID);
+
+		GenerateDecalFragments(PowerInfo!.RootNode, 0, h, ref shadowDecal.Base);
+
+		vertexCount = shadowDecal.Base.NVerts;
+		indexCount = 3 * shadowDecal.Base.NTris;
+
+		return true;
+	}
 
 	public bool GetTag() => Tag == DispArray!.CurTag;
 	public void SetTag() => Tag = (ushort)DispArray!.CurTag;
@@ -246,10 +290,12 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 		Assert(vert.X >= 0 && vert.X < GetSideLength() && vert.Y >= 0 && vert.Y < GetSideLength());
 		return vert.Y * GetSideLength() + vert.X;
 	}
-	public VertIndex IndexToVert(int index) => throw new NotImplementedException();
-
-	public void SetNodeIntersectsDecal(DispDecal dispDecal, in VertIndex nodeIndex) => throw new NotImplementedException();
-	public int GetNodeIntersectsDecal(DispDecal dispDecal, in VertIndex nodeIndex) => throw new NotImplementedException();
+	public VertIndex IndexToVert(int index) {
+		if (index == -1)
+			return new VertIndex(-1, -1);
+		else
+			return new VertIndex((short)(index % GetSideLength()), (short)(index / GetSideLength()));
+	}
 
 	public void CopyMapDispData(in BSPDDispInfo buildDisp) {
 		LightmapAlphaStart = buildDisp.LightmapAlphaStart;
@@ -335,22 +381,45 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 	internal void UpdateBoundingBox() {
 		BBoxMin.Init(1e24f, 1e24f, 1e24f);
 		BBoxMax.Init(-1e24f, -1e24f, -1e24f);
+
+		for (int i = 0; i < NumVerts(); i++) {
+			ref Vector3 pos = ref Verts[i].Pos;
+			MathLib.VectorMin(pos, BBoxMin, out BBoxMin);
+			MathLib.VectorMax(pos, BBoxMax, out BBoxMax);
+		}
 	}
 
 	public new int GetSideLength() => PowerInfo!.GetSideLength();
 
 	public int NumVerts() => PowerInfo!.GetNumVerts();
 
-	public void DecalProjectVert(in Vector3 pos, DispDecalBase dispDecal, in ShadowInfo_t info, out Vector3 outVec) => throw new NotImplementedException();
+	public void DecalProjectVert(in Vector3 pos, ref DispDecal dispDecal, ref readonly ShadowInfo_t info, out Vector3 outVec) {
+		if (Unsafe.IsNullRef(in info)) {
+			outVec.X = Vector3.Dot(pos, dispDecal.TextureSpaceBasis[0]) - dispDecal.Decal!.Dx + .5f;
+			outVec.Y = Vector3.Dot(pos, dispDecal.TextureSpaceBasis[1]) - dispDecal.Decal.Dy + .5f;
+			outVec.Z = 0;
+		}
+		else
+			MathLib.Vector3DMultiplyPosition(in info.WorldToShadow, in pos, out outVec);
+	}
 
-	public void CullDecals(int nodeBit, DispDecal[] decals, int nDecals, DispDecal[] childDecals, ref int nChildDecals) => throw new NotImplementedException();
+	// note: dead code in GMod
+	public void CullDecals(int nodeBit, ReadOnlySpan<DispDecalHandle> decals, int nDecals, Span<DispDecalHandle> childDecals, out int nChildDecals) {
+		nChildDecals = 0;
+		for (int iDecal = 0; iDecal < nDecals; iDecal++) {
+			if (s_DispDecals[decals[iDecal]].Base.NodeIntersect.IsBitSet(nodeBit)) {
+				childDecals[nChildDecals] = decals[iDecal];
+				++nChildDecals;
+			}
+		}
+	}
 
 	internal ref DispNodeInfo GetNodeInfoRef(int nodeBit) => ref NodeInfo![nodeBit];
 
 	internal void TesselateDisplacement() {
-		// ClearAllDecalFragments();
+		ClearAllDecalFragments();
 
-		// ClearAllShadowDecalFragments();
+		ClearAllShadowDecalFragments();
 
 		int maxIndices = MathLib.Square(GetSideLength() - 1) * 6;
 
@@ -431,17 +500,154 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 
 	// public void ComputeLightmapAndTextureCoordinate(in RayDispOutput output, Vector2[]? luv, Vector2[]? tuv) => throw new NotImplementedException();
 
-	public void GenerateDecalFragments(in VertIndex nodeIndex, int nodeBitIndex, ushort decalHandle, DispDecalBase dispDecal) => throw new NotImplementedException();
+	public void GenerateDecalFragments(in VertIndex nodeIndex, int nodeBitIndex, ushort decalHandle, ref DispDecalBase dispDecal) {
+		GenerateDecalFragments_R(nodeIndex, nodeBitIndex, decalHandle, ref dispDecal, 0);
+		dispDecal.Flags |= DecalFlags.FragmentsComputed;
+	}
 
-	void TestAddDecalTri(int indexStart, ushort decalHandle, DispDecal dispDecal) => throw new NotImplementedException();
-	void TestAddDecalTri(int indexStart, ushort decalHandle, DispShadowDecal dispDecal) => throw new NotImplementedException();
+	void TestAddDecalTri(int indexStart, ushort decalHandle, ref DispDecal dispDecal) {
+		Decal decal = dispDecal.Decal!;
 
-	// DispDecalFragment AllocateDispDecalFragment(DispDecalHandle h, int nVerts = 6) => throw new NotImplementedException();
+		Span<ushort> tempIndices = [
+			(ushort)(Indices[indexStart + 0] - VertOffset),
+			(ushort)(Indices[indexStart + 1] - VertOffset),
+			(ushort)(Indices[indexStart + 2] - VertOffset)
+		];
 
-	// void ClearDecalFragments(DispDecalHandle h) => throw new NotImplementedException();
-	void ClearAllDecalFragments() => throw new NotImplementedException();
+		ref Vector3 v0 = ref Verts[tempIndices[0]].Pos;
+		ref Vector3 v1 = ref Verts[tempIndices[1]].Pos;
+		ref Vector3 v2 = ref Verts[tempIndices[2]].Pos;
 
-	// DispShadowFragment AllocateShadowDecalFragment(DispShadowHandle h, int nCount) => throw new NotImplementedException();
+		Vector3 normal = Vector3.Cross(v2 - v0, v1 - v0);
+		MathLib.VectorNormalize(ref normal);
+		if (Vector3.Dot(normal, decal.Position - v0) >= dispDecal.Size)
+			return;
+
+		Span<DecalVert> verts = stackalloc DecalVert[3];
+		int iVert;
+		for (iVert = 0; iVert < 3; iVert++) {
+			ref DecalVert outVert = ref verts[iVert];
+
+			outVert.Pos = Verts[tempIndices[iVert]].Pos;
+			outVert.CLMCoords = Verts[tempIndices[iVert]].LMCoords;
+
+			DecalProjectVert(outVert.Pos, ref dispDecal, ref Unsafe.NullRef<ShadowInfo_t>(), out Vector3 tmp);
+			outVert.CtCoords.X = tmp.X;
+			outVert.CtCoords.Y = tmp.Y;
+		}
+
+		Span<DecalVert> clipped = Engine.Render.DoDecalSHClip(verts, default, decal, 3, vec3_origin);
+		int outCount = decal.ClippedVertCount;
+
+		if (outCount > 2) {
+			outCount = Math.Min(outCount, DispDecalFragment.MAX_VERTS);
+
+			ref DispDecalFragment fragment = ref AllocateDispDecalFragment(unchecked((DispDecalHandle)decalHandle), outCount);
+
+			for (iVert = 0; iVert < outCount; iVert++) {
+				fragment.Verts![iVert].Pos = clipped[iVert].Pos;
+				fragment.Verts[iVert].CtCoords = clipped[iVert].CtCoords;
+				fragment.Verts[iVert].CLMCoords = clipped[iVert].CLMCoords;
+			}
+
+			fragment.Decal = decal;
+			fragment.NVerts = (byte)outCount;
+			dispDecal.Base.NVerts += fragment.NVerts;
+			dispDecal.Base.NTris += (ushort)(fragment.NVerts - 2);
+		}
+	}
+
+	void TestAddDecalTri(int indexStart, ushort decalHandle, ref DispShadowDecal decal) {
+		Span<ushort> tempIndices = [
+			(ushort)(Indices[indexStart + 0] - VertOffset),
+			(ushort)(Indices[indexStart + 1] - VertOffset),
+			(ushort)(Indices[indexStart + 2] - VertOffset)
+		];
+#if !SWDS
+		Span<Vector3> positions = [
+			GetOverlayPos(tempIndices[0]),
+			GetOverlayPos(tempIndices[1]),
+			GetOverlayPos(tempIndices[2])
+		];
+
+		int count = g_ShadowMgr.ProjectAndClipVertices(decal.Shadow, positions, out ShadowVertex[]? clipVertex);
+		if (count < 3)
+			return;
+
+		Assert(count <= DispShadowFragment.MAX_VERTS);
+
+		ref DispShadowFragment fragment = ref AllocateShadowDecalFragment(decalHandle, count);
+
+		fragment.NVerts = count;
+
+		for (int i = 0; i < count; ++i) {
+			fragment.ShadowVerts![i].Position = clipVertex![i].Position;
+			fragment.ShadowVerts[i].ShadowSpaceTexCoord = clipVertex[i].ShadowSpaceTexCoord;
+
+			Assert(fragment.ShadowVerts[i].ShadowSpaceTexCoord[0] >= -1e-3f);
+			Assert(fragment.ShadowVerts[i].ShadowSpaceTexCoord[0] - 1.0f <= 1e-3f);
+			Assert(fragment.ShadowVerts[i].ShadowSpaceTexCoord[1] >= -1e-3f);
+			Assert(fragment.ShadowVerts[i].ShadowSpaceTexCoord[1] - 1.0f <= 1e-3f);
+		}
+
+		decal.Base.NVerts += (ushort)fragment.NVerts;
+		decal.Base.NTris += (ushort)(fragment.NVerts - 2);
+		Assert(decal.Base.NTris != 0);
+#endif
+	}
+
+	Vector3 GetOverlayPos(int vertIndex) => Verts[vertIndex].Pos + Verts[vertIndex].Normal * OVERLAY_AVOID_FLICKER_NORMAL_OFFSET;
+
+	ref DispDecalFragment AllocateDispDecalFragment(DispDecalHandle h, int nVerts = 6) {
+		DispDecalFragmentHandle f = unchecked((DispDecalFragmentHandle)s_DispDecalFragments.Alloc());
+		if (s_DispDecals[h].FirstFragment != DISP_DECAL_FRAGMENT_HANDLE_INVALID)
+			s_DispDecalFragments.LinkBefore(s_DispDecals[h].FirstFragment, f);
+		s_DispDecals[h].FirstFragment = f;
+		ref DispDecalFragment pf = ref s_DispDecalFragments[f];
+
+		pf.NVerts = (byte)nVerts;
+		pf.Verts = new DecalVert[nVerts];
+
+		return ref pf;
+	}
+
+	void ClearDecalFragments(DispDecalHandle h) {
+		ref DispDecal decal = ref s_DispDecals[h];
+		DispDecalFragmentHandle f = decal.FirstFragment;
+		DispDecalFragmentHandle next;
+
+		while (f != DISP_DECAL_FRAGMENT_HANDLE_INVALID) {
+			next = unchecked((DispDecalFragmentHandle)s_DispDecalFragments.Next(f));
+			s_DispDecalFragments.Remove(f);
+			f = next;
+		}
+
+		decal.FirstFragment = DISP_DECAL_FRAGMENT_HANDLE_INVALID;
+
+		decal.Base.Flags &= ~DecalFlags.FragmentsComputed;
+
+		decal.Base.NTris = 0;
+		decal.Base.NVerts = 0;
+	}
+
+	void ClearAllDecalFragments() {
+		DispDecalHandle h = FirstDecal;
+		while (h != DISP_DECAL_HANDLE_INVALID) {
+			ClearDecalFragments(h);
+			h = unchecked((DispDecalHandle)s_DispDecals.Next(h));
+		}
+	}
+
+	ref DispShadowFragment AllocateShadowDecalFragment(DispShadowHandle h, int count) {
+		DispShadowFragmentHandle f = unchecked((DispShadowFragmentHandle)s_DispShadowFragments.Alloc());
+		if (s_DispShadowDecals[h].FirstFragment != DISP_SHADOW_FRAGMENT_HANDLE_INVALID)
+			s_DispShadowFragments.LinkBefore(s_DispShadowDecals[h].FirstFragment, f);
+		s_DispShadowDecals[h].FirstFragment = f;
+		ref DispShadowFragment pf = ref s_DispShadowFragments[f];
+		pf.NVerts = count;
+		pf.ShadowVerts = new ShadowVertex[count];
+		return ref pf;
+	}
 
 	void ClearShadowDecalFragments(DispShadowHandle h) {
 		ref DispShadowDecal decal = ref s_DispShadowDecals[h];
@@ -461,13 +667,126 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 		decal.Base.NVerts = 0;
 	}
 
-	void ClearAllShadowDecalFragments() => throw new NotImplementedException();
+	void ClearAllShadowDecalFragments() {
+		DispShadowHandle h = FirstShadowDecal;
+		while (h != DISP_SHADOW_HANDLE_INVALID) {
+			ClearShadowDecalFragments(h);
+			h = unchecked((DispShadowHandle)s_DispShadowDecals.Next(h));
+		}
+	}
 
-	void GenerateDecalFragments_R(in VertIndex nodeIndex, int nodeBitIndex, ushort decalHandle, DispDecalBase dispDecal, int level) => throw new NotImplementedException();
+	void GenerateDecalFragments_R(in VertIndex nodeIndex, int nodeBitIndex, ushort decalHandle, ref DispDecalBase dispDecal, int level) {
+		Assert(nodeBitIndex < PowerInfo!.NodeCount);
+		ref DispNodeInfo nodeInfo = ref NodeInfo![nodeBitIndex];
 
-	void SetupDecalNodeIntersect(in VertIndex nodeIndex, int nodeBitIndex, DispDecalBase dispDecal, in ShadowInfo_t info) => throw new NotImplementedException();
+		int nodeIndexInt = VertIndex(nodeIndex);
 
-	// bool SetupDecalNodeIntersect_R(in VertIndex nodeIndex, int nodeBitIndex, DispDecalBase dispDecal, in ShadowInfo_t info, int level, DecalNodeSetupCache cache) => throw new NotImplementedException();
+		if (!dispDecal.NodeIntersect.IsBitSet(nodeBitIndex))
+			return;
+
+		if ((level + 1 < Power) && (nodeInfo.Flags & DispNodeInfo.CHILDREN_HAVE_TRIANGLES) != 0) {
+			int childNodeBit = nodeBitIndex + 1;
+			for (int child = 0; child < 4; child++) {
+				ref VertIndex childNode = ref PowerInfo.ChildVerts[nodeIndexInt].Verts[child];
+
+				bool activeChild = ActiveVerts.Get(VertIndex(childNode)) != 0;
+				if (activeChild)
+					GenerateDecalFragments_R(childNode, childNodeBit, decalHandle, ref dispDecal, level + 1);
+				childNodeBit += PowerInfo.NodeIndexIncrements[level];
+			}
+		}
+
+		bool isShadow = (dispDecal.Flags & DecalFlags.DecalShadow) != 0;
+
+		int index = nodeInfo.FirstTesselationIndex;
+		for (int i = 0; i < nodeInfo.Count; i += 3) {
+			if (isShadow)
+				TestAddDecalTri(index + i, decalHandle, ref s_DispShadowDecals[decalHandle]);
+			else
+				TestAddDecalTri(index + i, decalHandle, ref s_DispDecals[unchecked((DispDecalHandle)decalHandle)]);
+		}
+	}
+
+	void SetupDecalNodeIntersect(in VertIndex nodeIndex, int nodeBitIndex, ref DispDecalBase decalBase, ref DispDecal dispDecal, ref readonly ShadowInfo_t info) {
+		decalBase.NodeIntersect.ClearAll();
+
+		DecalNodeSetupCache cache = s_DecalNodeSetupCache;
+		cache.ResetCache();
+
+		bool anyIntersection = SetupDecalNodeIntersect_R(nodeIndex, nodeBitIndex, ref decalBase, ref dispDecal, in info, 0, cache);
+
+		decalBase.Flags |= DecalFlags.NodeBitfieldComputed;
+		if (anyIntersection)
+			decalBase.Flags &= ~DecalFlags.NoIntersection;
+		else
+			decalBase.Flags |= DecalFlags.NoIntersection;
+	}
+
+	bool SetupDecalNodeIntersect_R(in VertIndex nodeIndex, int nodeBitIndex, ref DispDecalBase decalBase, ref DispDecal dispDecal, ref readonly ShadowInfo_t info, int level, DecalNodeSetupCache cache) {
+		int nodeIndexInt = VertIndex(nodeIndex);
+
+		if (level + 1 < Power) {
+			bool anyChildIntersected = false;
+			int childNodeBit = nodeBitIndex + 1;
+			for (int child = 0; child < 4; child++) {
+				ref VertIndex childNode = ref PowerInfo!.ChildVerts[nodeIndexInt].Verts[child];
+
+				if (SetupDecalNodeIntersect_R(childNode, childNodeBit, ref decalBase, ref dispDecal, in info, level + 1, cache))
+					anyChildIntersected = true;
+				childNodeBit += PowerInfo.NodeIndexIncrements[level];
+			}
+
+			if (anyChildIntersected) {
+				decalBase.NodeIntersect.Set(nodeBitIndex);
+				return true;
+			}
+
+			return false;
+		}
+
+		Vector3 min, max;
+		if (!cache.IsCached(nodeIndexInt)) {
+			DecalProjectVert(Verts[nodeIndexInt].Pos, ref dispDecal, in info, out cache.ProjectedVert[nodeIndexInt]);
+			cache.MarkCached(nodeIndexInt);
+		}
+		min = cache.ProjectedVert[nodeIndexInt];
+		max = cache.ProjectedVert[nodeIndexInt];
+
+		for (int i = 0; i < 4; i++) {
+			ref VertIndex sideVert = ref PowerInfo!.SideVerts[nodeIndexInt].Verts[i];
+			ref VertIndex cornerVert = ref PowerInfo.SideVertCorners[nodeIndexInt].Verts[i];
+
+			int sideIndex = VertIndex(sideVert);
+			if (!cache.IsCached(sideIndex)) {
+				DecalProjectVert(Verts[sideIndex].Pos, ref dispDecal, in info, out cache.ProjectedVert[sideIndex]);
+				cache.MarkCached(sideIndex);
+			}
+
+			MathLib.VectorMin(cache.ProjectedVert[sideIndex], min, out min);
+			MathLib.VectorMax(cache.ProjectedVert[sideIndex], max, out max);
+
+			int cornerIndex = VertIndex(cornerVert);
+			if (!cache.IsCached(cornerIndex)) {
+				DecalProjectVert(Verts[cornerIndex].Pos, ref dispDecal, in info, out cache.ProjectedVert[cornerIndex]);
+				cache.MarkCached(cornerIndex);
+			}
+
+			MathLib.VectorMin(cache.ProjectedVert[cornerIndex], min, out min);
+			MathLib.VectorMax(cache.ProjectedVert[cornerIndex], max, out max);
+		}
+
+		if (min.X <= 1 && max.X >= 0 && min.Y <= 1 && max.Y >= 0) {
+			if (!Unsafe.IsNullRef(in info)) {
+				if ((max.Z < 0) || (min.Z > info.MaxDist))
+					return false;
+			}
+
+			decalBase.NodeIntersect.Set(nodeBitIndex);
+			return true;
+		}
+
+		return false;
+	}
 
 	public static DispInfo? GetModelDisp(Model world, int i) {
 		return DispInfo_IndexArray(world.Brush.Shared!.DispInfos, i);
@@ -506,8 +825,8 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 		g_ShadowMgr.DrawFlashlightOverlays(sortGroup, flashlightMask);
 		// OverlayMgr().ClearRenderLists(sortGroup)
 
-		// DispInfo_BatchDecals(visibleDisps, visibleDispCount);
-		// DispInfo_DrawDecals(visibleDisps, visibleDispCount);
+		DispInfo_BatchDecals(visibleDisps, visibleDispCount);
+		DispInfo_DrawDecals(visibleDisps, visibleDispCount);
 
 		g_ShadowMgr.DrawFlashlightDecalsOnDisplacements(sortGroup, visibleDisps, visibleDispCount, flashlightMask);
 		g_ShadowMgr.RenderShadows();
@@ -679,8 +998,290 @@ public class DispInfo : DispUtilsHelper, IDispInfo
 #endif
 	}
 
-	static void DispInfo_BatchDecals(ReadOnlySpan<DispInfo?> visibleDisps, int visibleDispCount) => throw new NotImplementedException();
-	static void DispInfo_DrawDecals(ReadOnlySpan<DispInfo?> visibleDisps, int visibleDispCount) => throw new NotImplementedException();
+	static void DecalDispSurfacesInit() {
+#if !SWDS
+		Engine.Render.g_DispDecalSortPool.Clear();
+		++Engine.Render.g_DispDecalSortCheckCount;
+#endif
+	}
+
+	static void DispInfo_BatchDecals(ReadOnlySpan<DispInfo?> visibleDisps, int visibleDispCount) {
+#if !SWDS
+		DecalDispSurfacesInit();
+
+		if (visibleDispCount == 0)
+			return;
+
+		for (int iDisp = 0; iDisp < visibleDispCount; ++iDisp) {
+			DispInfo disp = visibleDisps[iDisp]!;
+			if (disp.FirstDecal == DISP_DECAL_HANDLE_INVALID)
+				continue;
+
+			DispDecalHandle hDecal = disp.FirstDecal;
+			while (hDecal != DISP_DECAL_HANDLE_INVALID) {
+				ref DispDecal decal = ref s_DispDecals[hDecal];
+
+				if ((decal.Base.Flags & DecalFlags.FragmentsComputed) == 0)
+					disp.GenerateDecalFragments(disp.PowerInfo!.RootNode, 0, unchecked((ushort)hDecal), ref decal.Base);
+
+				if (decal.Base.NTris == 0) {
+					hDecal = unchecked((DispDecalHandle)s_DispDecals.Next(hDecal));
+					continue;
+				}
+
+				IMaterial? material = decal.Decal!.Material;
+				if (material == null) {
+					DevMsg($"DispInfo_BatchDecals: material is NULL, decal {hDecal}.\n");
+					hDecal = unchecked((DispDecalHandle)s_DispDecals.Next(hDecal));
+					continue;
+				}
+
+				int treeType;
+				if (material.GetPropertyFlag(MaterialPropertyTypes.NeedsLightmap)) {
+					if ((decal.Decal.Flags & FDecal.Permanent) != 0)
+						treeType = (int)DecalSortType.PermanentLightmap;
+					else
+						treeType = (int)DecalSortType.Lightmap;
+				}
+				else
+					treeType = (int)DecalSortType.NonLightmap;
+
+				int group = 0;
+
+				int pool = Engine.Render.g_DispDecalSortPool.Alloc();
+				Engine.Render.g_DispDecalSortPool[pool] = decal.Decal.DecalPool;
+#if GMOD_DLL
+				decal.Decal.Flags &= ~FDecal.HasUpdated;
+#endif
+
+				nint sortTree = decal.Decal.SortTree;
+				nint sortMaterial = decal.Decal.SortMaterial;
+
+				List<DecalMaterialBucket> materialBuckets = Engine.Render.g_DispDecalSortTrees[(int)sortTree].DecalSortBuckets[group][treeType];
+#if GMOD_DLL
+				if (materialBuckets.Count <= 0) {
+					hDecal = unchecked((DispDecalHandle)s_DispDecals.Next(hDecal));
+					continue;
+				}
+#endif
+
+				DecalMaterialBucket materialBucket = materialBuckets[(int)sortMaterial];
+				if (materialBucket.CheckCount == Engine.Render.g_DispDecalSortCheckCount) {
+					nint head = materialBucket.Head;
+					Engine.Render.g_DispDecalSortPool.LinkBefore((int)head, pool);
+				}
+
+				materialBucket.Head = pool;
+				materialBucket.CheckCount = Engine.Render.g_DispDecalSortCheckCount;
+				materialBuckets[(int)sortMaterial] = materialBucket;
+
+				hDecal = unchecked((DispDecalHandle)s_DispDecals.Next(hDecal));
+			}
+		}
+#endif
+	}
+
+	static void DispInfo_DrawDecalMeshList(ref DecalMeshList meshList) {
+		using MatRenderContextPtr renderContext = new(materials);
+
+		bool matFullbright = MatSysInterface.MaterialSystemConfig.Fullbright == 1;
+
+		int batchCount = meshList.BatchCount;
+		for (int iBatch = 0; iBatch < batchCount; ++iBatch) {
+			ref DecalBatchList batch = ref meshList.Batches[iBatch];
+
+			if (!matFullbright)
+				renderContext.BindLightmapPage(batch.LightmapPage);
+			else
+				renderContext.BindLightmapPage(StandardLightmap.White);
+
+			renderContext.Bind(batch.Material, batch.Proxy);
+			meshList.Mesh!.Draw(batch.StartIndex, batch.IndexCount);
+		}
+	}
+
+	static void DispInfo_DrawDecalsGroup(int group, int treeType) {
+#if !SWDS
+		using MatRenderContextPtr renderContext = new(materials);
+
+		DecalMeshList meshList = new();
+		MeshBuilder meshBuilder = new();
+
+		int vertCount = 0;
+		int indexCount = 0;
+
+		Engine.Render.DecalsGetMaxMesh(renderContext.Context, out int decalSortMaxVerts, out int decalSortMaxIndices);
+
+		bool matWireframe = ShouldDrawInWireFrameMode();
+
+		Span<Decal?> decalPool = Engine.Render.s_DecalPool.AsSpan();
+		PooledLinkedList<int> sortPool = Engine.Render.g_DispDecalSortPool;
+
+		nint sortTreeCount = Engine.Render.g_DispDecalSortTrees.Count;
+		for (nint iSortTree = 0; iSortTree < sortTreeCount; ++iSortTree) {
+			bool meshInit = true;
+
+			List<DecalMaterialBucket> materialBucketList = Engine.Render.g_DispDecalSortTrees[(int)iSortTree].DecalSortBuckets[group][treeType];
+			nint bucketCount = materialBucketList.Count;
+			for (nint iBucket = 0; iBucket < bucketCount; ++iBucket) {
+				if (materialBucketList[(int)iBucket].CheckCount != Engine.Render.g_DispDecalSortCheckCount)
+					continue;
+
+				nint head = materialBucketList[(int)iBucket].Head;
+				if (!sortPool.IsValidIndex((int)head))
+					continue;
+
+				Decal? decalHead = decalPool[sortPool[(int)head]];
+				Assert(decalHead!.Material != null);
+				if (decalHead.Material == null)
+					continue;
+
+#if GMOD_DLL
+				if (decalHead.SurfID == -1) {
+					Warning($"Displacement Decal @ {decalHead.Position.X:F2} {decalHead.Position.Y:F2} {decalHead.Position.Z:F2} has invalid surface ID!\n");
+					continue;
+				}
+#endif
+
+				VertexFormat vertexFormat = decalHead.Material.GetVertexFormat();
+				if (vertexFormat == 0)
+					continue;
+
+				int batch = -1;
+				bool batchInit = true;
+
+				int count;
+				int element = (int)head;
+				while (element != PooledLinkedList<int>.INVALID_INDEX) {
+					Decal decalElement = decalPool[sortPool[element]]!;
+					element = sortPool.Next(element);
+
+					ref DispDecal decal = ref s_DispDecals[decalElement.DispDecal];
+
+					IMaterial? material = decal.Decal!.Material;
+					if (material == null) {
+						DevMsg($"DispInfo_DrawDecalsGroup: material is NULL decal {decalElement.DispDecal}.\n");
+						continue;
+					}
+
+#if GMOD_DLL
+					float fade = 1.0f;
+					if ((decal.Decal.Flags & FDecal.Dynamic) != 0) {
+						if (decal.Decal.FadeDuration < 0)
+							fade = (float)(-(cl.GetTime() - decal.Decal.FadeStartTime) / decal.Decal.FadeDuration);
+						else
+							fade = (float)(1.0 - (cl.GetTime() - decal.Decal.FadeStartTime) / decal.Decal.FadeDuration);
+
+						fade = Math.Clamp(fade, 0.0f, 1.0f);
+					}
+					byte alpha = (byte)(int)(fade * 255.0f);
+#endif
+
+					DispDecalFragmentHandle hFrag = decal.FirstFragment;
+					while (hFrag != DISP_DECAL_FRAGMENT_HANDLE_INVALID) {
+						ref DispDecalFragment fragment = ref s_DispDecalFragments[hFrag];
+						hFrag = unchecked((DispDecalFragmentHandle)s_DispDecalFragments.Next(hFrag));
+						count = fragment.NVerts;
+
+						if ((vertCount + count >= decalSortMaxVerts) || (indexCount + (count - 2) >= decalSortMaxIndices)) {
+							if (batch != -1)
+								meshList.Batches[batch].IndexCount = (ushort)(indexCount - meshList.Batches[batch].StartIndex);
+
+							if (!meshInit) { // note: GMod calls End here without Begin (fatal Error) when the previous sort tree left the counters full
+								meshBuilder.End();
+								DispInfo_DrawDecalMeshList(ref meshList);
+							}
+
+							meshInit = true;
+							batch = -1;
+							batchInit = true;
+						}
+
+						if (meshInit) {
+							meshList.Mesh = null;
+							meshList.BatchCount = 0;
+
+							if (!matWireframe)
+								meshList.Mesh = renderContext.GetDynamicMesh(false, null, null, decalHead.Material);
+							else
+								meshList.Mesh = renderContext.GetDynamicMesh(false, null, null, MatSys.MaterialDecalWireframe);
+
+							meshBuilder.Begin(meshList.Mesh!, MaterialPrimitiveType.Triangles, decalSortMaxVerts, decalSortMaxIndices);
+
+							vertCount = 0;
+							indexCount = 0;
+
+							meshInit = false;
+						}
+
+						if (batchInit) {
+							batch = meshList.BatchCount++;
+							ref DecalBatchList newBatch = ref meshList.Batches[batch];
+							newBatch = default;
+							newBatch.StartIndex = (ushort)indexCount;
+
+							if (!matWireframe) {
+								newBatch.Material = decalHead.Material;
+								newBatch.Proxy = decalHead.UserData;
+								newBatch.LightmapPage = MatSys.MaterialSortInfoArray![ModelLoader.MSurf_MaterialSortID(ref ModelLoader.SurfaceHandleFromIndex(decalHead.SurfID))].LightmapPageID;
+							}
+							else
+								newBatch.Material = MatSys.MaterialDecalWireframe;
+
+							batchInit = false;
+						}
+						Assert(batch != -1);
+
+						Decal fragmentDecal = fragment.Decal!;
+						float offset = fragmentDecal.LightmapOffset;
+						for (int iVert = 0; iVert < fragment.NVerts; ++iVert) {
+							ref DecalVert vert = ref fragment.Verts![iVert];
+
+							meshBuilder.Position3fv(vert.Pos);
+							ref Vector3 normal = ref ModelLoader.MSurf_Plane(ref ModelLoader.SurfaceHandleFromIndex(fragmentDecal.SurfID)).Normal;
+							meshBuilder.Normal3fv(normal);
+#if GMOD_DLL
+							meshBuilder.Color4ub(255, 255, 255, alpha);
+#else
+							meshBuilder.Color4ub(fragmentDecal.Color.R, fragmentDecal.Color.G, fragmentDecal.Color.B, fragmentDecal.Color.A);
+#endif
+							meshBuilder.TexCoord2f(0, vert.CtCoords.X, vert.CtCoords.Y);
+							meshBuilder.TexCoord2f(1, vert.CLMCoords.X, vert.CLMCoords.Y);
+							meshBuilder.TexCoord1f(2, offset);
+							meshBuilder.AdvanceVertex();
+						}
+
+						int triCount = count - 2;
+						meshBuilder.FastPolygon(vertCount, triCount);
+
+						vertCount += count;
+						indexCount += triCount * 3;
+					}
+
+					if (batch != -1)
+						meshList.Batches[batch].IndexCount = (ushort)(indexCount - meshList.Batches[batch].StartIndex);
+				}
+			}
+
+			if (!meshInit) {
+				meshBuilder.End();
+				DispInfo_DrawDecalMeshList(ref meshList);
+			}
+		}
+#endif
+	}
+
+	static void DispInfo_DrawDecals(ReadOnlySpan<DispInfo?> visibleDisps, int visibleDispCount) {
+#if !SWDS
+		int group = 0;
+
+		DispInfo_DrawDecalsGroup(group, (int)DecalSortType.PermanentLightmap);
+
+		DispInfo_DrawDecalsGroup(group, (int)DecalSortType.Lightmap);
+
+		DispInfo_DrawDecalsGroup(group, (int)DecalSortType.NonLightmap);
+#endif
+	}
 	static void DispInfo_DrawDebugInformation(Span<SurfaceHandle_t> list, int listCount) {
 		// => throw new NotImplementedException();
 	}
