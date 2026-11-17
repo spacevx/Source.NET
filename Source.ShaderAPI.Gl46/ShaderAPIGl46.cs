@@ -2791,7 +2791,12 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 				float factor = 0.0f;
 				float units = 0.0f;
 
-				if (state.ZBias == PolygonOffsetMode.ShadowBias) {
+				if (state.ZBias == PolygonOffsetMode.Decal) {
+					MaterialSystem_Config config = ShaderUtil.GetConfig();
+					factor = (config.SlopeScaleDepthBias_Decal != 0.0f) ? 1.0f / config.SlopeScaleDepthBias_Decal : 0.0f;
+					units = (config.DepthBias_Decal != 0.0f) ? 1.0f / config.DepthBias_Decal : 0.0f;
+				}
+				else if (state.ZBias == PolygonOffsetMode.ShadowBias) {
 					factor = -1.0f;
 					units = -1.0f;
 				}

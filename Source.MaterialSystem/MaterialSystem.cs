@@ -1004,6 +1004,8 @@ public class MaterialSystem : IMaterialSystemInternal, IShaderUtil
 		return renderContext ?? HardwareRenderContext;
 	}
 
+	public MaterialSystem_Config GetConfig() => Config;
+
 	public bool InFlashlightMode() {
 		return GetRenderContextInternal().InFlashlightMode();
 	}

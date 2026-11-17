@@ -4,6 +4,7 @@ namespace Source.Common.ShaderAPI;
 
 public interface IShaderUtil
 {
+	MaterialSystem_Config GetConfig();
 	bool InFlashlightMode();
 	bool OnDrawMesh(IMesh mesh, int firstIndex, int indexCount);
 	unsafe bool OnDrawMesh(IMesh mesh, PrimList* lists, int numLists);

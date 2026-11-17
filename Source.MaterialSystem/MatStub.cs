@@ -498,6 +498,7 @@ public class DummyMaterialSystem : IMaterialSystemStub, IShaderUtil, IMatRenderC
 	public bool AddTextureCompositorTemplate(ReadOnlySpan<char> name, KeyValues tmplDesc, int texCompositeTemplateFlags = 0) => false;
 	public bool VerifyTextureCompositorTemplates() => false;
 	public bool HasShaderAPI() => true;
+	public MaterialSystem_Config GetConfig() => g_dummyConfig;
 	public bool InFlashlightMode() => false;
 	public bool OnDrawMesh(IMesh mesh, int firstIndex, int indexCount) => false;
 	public unsafe bool OnDrawMesh(IMesh mesh, PrimList* lists, int numLists) => false;
