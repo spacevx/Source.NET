@@ -352,6 +352,15 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 	ShaderAPITextureHandle_t LinearToGammaTableTexture;
 	ShaderAPITextureHandle_t LinearToGammaTableIdentityTexture;
 
+	void EnabledSRGBWrite(bool enabled) {
+		if (HardwareConfig.SupportsPixelShaders_2_b()) {
+			if (enabled && HardwareConfig.NeedsShaderSRGBConversion() != 0)
+				BindTexture(Sampler.Sampler15, LinearToGammaTableTexture);
+			else
+				BindTexture(Sampler.Sampler15, LinearToGammaTableIdentityTexture);
+		}
+	}
+
 	public float LinearToGamma_HardwareSpecific(float linear) {
 		return MathLib.SrgbLinearToGamma(linear);
 	}
@@ -890,8 +899,15 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 				break;
 
 			case MaterialFogMode.LinearBelowFogZ:
-				for (int i = 0; i != 3; ++i)
-					fogColor[i] = GammaToLinear_HardwareSpecific(PixelFogColor[i]);
+				if (HardwareConfig.NeedsShaderSRGBConversion() != 0) {
+					// srgb in ps2b uses the 2.2 curve
+					for (int i = 0; i != 3; ++i)
+						fogColor[i] = MathF.Pow(PixelFogColor[i], 2.2f);
+				}
+				else {
+					for (int i = 0; i != 3; ++i)
+						fogColor[i] = GammaToLinear_HardwareSpecific(PixelFogColor[i]);
+				}
 
 				if (!FogGammaCorrectionDisabled && HardwareConfig.GetHDRType() == HDRType.Integer) {
 					for (int i = 0; i != 3; ++i)
@@ -2774,8 +2790,11 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 			if (force || state.AlphaToCoverage != last.AlphaToCoverage)
 				glToggle(GL_SAMPLE_ALPHA_TO_COVERAGE, state.AlphaToCoverage);
 
-			if (force || state.SRGBWriteEnable != last.SRGBWriteEnable)
+			if (force || state.SRGBWriteEnable != last.SRGBWriteEnable) {
+				// todo: GMod turns hardware sRGB writes off when NeedsShaderSRGBConversion(), only DecalModulate has the CONVERT_TO_SRGB combo so far
 				glToggle(GL_FRAMEBUFFER_SRGB, state.SRGBWriteEnable);
+				EnabledSRGBWrite(state.SRGBWriteEnable);
+			}
 
 			bool polyOffsetEnabled = state.ZBias != PolygonOffsetMode.Disable;
 			bool lastPolyOffsetEnabled = last.ZBias != PolygonOffsetMode.Disable;

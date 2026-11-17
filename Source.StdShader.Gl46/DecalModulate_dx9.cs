@@ -63,7 +63,6 @@ public class DecalModulate_dx9 : BaseVSShader
 				ShaderShadow.SetVertexShader("decalmodulate", vshIndex.GetIndex());
 
 				StaticShaderIndex pshIndex = new(ShaderShadow, ShaderType.Pixel, "decalmodulate");
-				// todo: CONVERT_TO_SRGB is not a combo of decalmodulate_gl460.fs yet (gamma table lookup)
 				pshIndex.Set("CONVERT_TO_SRGB", HardwareConfig.NeedsShaderSRGBConversion());
 				ShaderShadow.SetPixelShader("decalmodulate", pshIndex.GetIndex());
 			}
@@ -81,7 +80,6 @@ public class DecalModulate_dx9 : BaseVSShader
 				ShaderShadow.SetVertexShader("decalmodulate", vshIndex.GetIndex());
 
 				StaticShaderIndex pshIndex = new(ShaderShadow, ShaderType.Pixel, "decalmodulate");
-				// todo: CONVERT_TO_SRGB is not a combo of decalmodulate_gl460.fs yet (gamma table lookup)
 				pshIndex.Set("CONVERT_TO_SRGB", HardwareConfig.NeedsShaderSRGBConversion());
 				ShaderShadow.SetPixelShader("decalmodulate", pshIndex.GetIndex());
 			}

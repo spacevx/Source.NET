@@ -207,12 +207,39 @@ vec3 BlendPixelFog(vec3 vShaderColor, float pixelFogFactor, vec3 vFogColor, int 
     return vShaderColor;
 }
 
+#ifdef CONVERT_TO_SRGB
+#if CONVERT_TO_SRGB
+#define SRGB_OUTPUT_LOOKUP
+#endif
+#endif
+
+#ifdef SRGB_OUTPUT_LOOKUP
+// On ps2b capable hardware we always have the linear->gamma conversion table texture in sampler s15.
+layout(binding = 15) uniform sampler2D GammaTableSampler;
+
+// note: GMod reads the table through an sRGB read, GL has no sRGB decode for the I8 table so it is done here after filtering
+float GammaTableLookup(float x)
+{
+    float c = texture(GammaTableSampler, vec2(x, 0.5)).r;
+    return (c <= 0.04045) ? (c / 12.92) : pow((c + 0.055) / 1.055, 2.4);
+}
+
+vec3 SRGBOutput(vec3 vShaderColor)
+{
+    vec3 result;
+    result.r = GammaTableLookup(vShaderColor.r);
+    result.g = GammaTableLookup(vShaderColor.g);
+    result.b = GammaTableLookup(vShaderColor.b);
+    return result;
+}
+#else
 // The framebuffer performs the linear->gamma conversion for us (GL_FRAMEBUFFER_SRGB), which is
 // the equivalent of the CONVERT_TO_SRGB == 0 path.
 vec3 SRGBOutput(vec3 vShaderColor)
 {
     return vShaderColor;
 }
+#endif
 
 float SoftParticleDepth(float flDepth)
 {

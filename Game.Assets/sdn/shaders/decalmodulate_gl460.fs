@@ -1,4 +1,6 @@
 #version 460
+// STATIC: "CONVERT_TO_SRGB"			"0..1"
+
 // DYNAMIC: "PIXELFOGTYPE"				"0..1"
 
 layout(location = 0) in vec2 vs_BaseTexCoord;
