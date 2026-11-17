@@ -154,6 +154,10 @@ public unsafe partial class StudioRender
 
 		StaticPropRootToWorld = rootToWorld;
 		PoseToWorld[0] = rootToWorld;
+#if GMOD_DLL
+		for (int i = 1; i < Math.Min(info.StudioHdr.NumBones, Studio.MAXSTUDIOBONES); i++)
+			PoseToWorld[i] = rootToWorld;
+#endif
 		fixed (Matrix3x4* pRootToWorld = &StaticPropRootToWorld) {
 			pBoneToWorld = pRootToWorld;
 			nBoneToWorld = 1;

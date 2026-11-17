@@ -675,6 +675,8 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 		Render.GMOD_DecalRemoveEntity(index);
 	}
 
+	public int GMOD_RemoveDecals(in Vector3 position, float radius, int maxCount, bool permanent) => Render.DecalTermAtPos(in position, radius, maxCount, permanent);
+
 	public ReadOnlySpan<char> GMOD_TranslateAlias(ReadOnlySpan<char> cmd) {
 		throw new NotImplementedException();
 	}

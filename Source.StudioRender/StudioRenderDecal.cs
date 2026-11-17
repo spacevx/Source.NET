@@ -174,26 +174,26 @@ public unsafe partial class StudioRender
 		if (hardwareData == null || hardwareData.NumLODs <= 0)
 			return STUDIORENDER_DECAL_INVALID;
 
-		lock (DecalMutex) {
-			DecalModelList decal = new();
+		DecalModelList decal = new();
 
-			int handle;
+		int handle;
+		lock (DecalMutex) {
 			if (FreeDecalLists.TryPop(out handle))
 				DecalList[handle] = decal;
 			else {
 				handle = DecalList.Count;
 				DecalList.Add(decal);
 			}
-
-			decal.HardwareData = hardwareData;
-			decal.Lod = new DecalLod[hardwareData.NumLODs];
-			decal.Lods = hardwareData.NumLODs;
-
-			for (int i = 0; i < hardwareData.NumLODs; i++)
-				decal.Lod[i] = new();
-
-			return (StudioDecalHandle_t)handle;
 		}
+
+		decal.HardwareData = hardwareData;
+		decal.Lod = new DecalLod[hardwareData.NumLODs];
+		decal.Lods = hardwareData.NumLODs;
+
+		for (int i = 0; i < hardwareData.NumLODs; i++)
+			decal.Lod[i] = new();
+
+		return (StudioDecalHandle_t)handle;
 	}
 
 	internal void DestroyDecalList(StudioDecalHandle_t hDecal) {
@@ -202,22 +202,23 @@ public unsafe partial class StudioRender
 
 		RemoveDecalListFromLRU(hDecal);
 
-		lock (DecalMutex) {
-			int h = hDecal;
-			DecalModelList decal = DecalList[h]!;
+		int h = hDecal;
+		DecalModelList decal = DecalList[h]!;
 
-			for (int i = 0; i < decal.Lods; i++) {
-				foreach (DecalMaterial mat in decal.Lod[i].Materials) {
-					g_nTotalDecalVerts -= mat.Vertices.Count;
+		// Clean up
+		for (int i = 0; i < decal.Lods; i++) {
+			foreach (DecalMaterial mat in decal.Lod[i].Materials) {
+				g_nTotalDecalVerts -= mat.Vertices.Count;
 #if GMOD_DLL
-					mat.Material?.DecrementReferenceCount();
+				mat.Material?.DecrementReferenceCount();
 #endif
-				}
-
-				decal.Lod[i].Materials.Clear();
 			}
 
-			decal.Lod = null!;
+			decal.Lod[i].Materials.Clear();
+		}
+
+		decal.Lod = null!;
+		lock (DecalMutex) {
 			DecalList[h] = null;
 			FreeDecalLists.Push(h);
 		}
@@ -351,6 +352,17 @@ public unsafe partial class StudioRender
 		outVert.Model = 0xFFFF;
 		outVert.Body = 0xFFFF;
 
+#if GMOD_DLL
+		double oneMinusT = 1.0 - t;
+		outVert.Position.X = (float)(endVert.Position.X * t + startVert.Position.X * oneMinusT);
+		outVert.Position.Y = (float)(endVert.Position.Y * t + startVert.Position.Y * oneMinusT);
+		outVert.Position.Z = (float)(endVert.Position.Z * t + startVert.Position.Z * oneMinusT);
+
+		Vector3 normal;
+		normal.X = (float)(endVert.Position.X * t + startVert.Position.X * oneMinusT);
+		normal.Y = (float)(endVert.Position.Y * t + startVert.Position.Y * oneMinusT);
+		normal.Z = (float)(endVert.Position.Z * t + startVert.Position.Z * oneMinusT);
+#else
 		outVert.Position.X = startVert.Position.X * (1.0F - t) + endVert.Position.X * t;
 		outVert.Position.Y = startVert.Position.Y * (1.0F - t) + endVert.Position.Y * t;
 		outVert.Position.Z = startVert.Position.Z * (1.0F - t) + endVert.Position.Z * t;
@@ -359,6 +371,7 @@ public unsafe partial class StudioRender
 		normal.X = startVert.Position.X * (1.0F - t) + endVert.Position.X * t;
 		normal.Y = startVert.Position.Y * (1.0F - t) + endVert.Position.Y * t;
 		normal.Z = startVert.Position.Z * (1.0F - t) + endVert.Position.Z * t;
+#endif
 		MathLib.VectorNormalize(ref normal);
 		outVert.Normal = normal;
 
@@ -1360,6 +1373,7 @@ public unsafe partial class StudioRender
 			return;
 
 		pRC = rc;
+		// note: GMod keeps the header of the last prop drawn, ours is cleared after each draw
 		StudioHdr = drawInfo.StudioHdr;
 
 		using MatRenderContextPtr renderContext = new(materialSystem);

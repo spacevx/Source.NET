@@ -746,7 +746,7 @@ public static partial class LuaUtil
 	[LuaFunction]
 	static int Decal(ILuaInterface lua) {
 		string name = lua.CheckString(1);
-		if (name.Length == 0 || unchecked((sbyte)name[0]) <= (sbyte)' ') {
+		if (name.Length == 0 || name[0] <= ' ' || name[0] >= 0x80) {
 			Warning("util.Decal: Invalid String\n");
 			return 0;
 		}
@@ -795,13 +795,13 @@ public static partial class LuaUtil
 	[LuaFunction]
 	static int DecalMaterial(ILuaInterface lua) {
 		string name = lua.CheckString(1);
-		if (name.Length == 0 || unchecked((sbyte)name[0]) <= (sbyte)' ') {
+		if (name.Length == 0 || name[0] <= ' ' || name[0] >= 0x80) {
 			DevMsg("util.Decal: Invalid String\n");
 			return 0;
 		}
 
-		ReadOnlySpan<char> material = decalsystem.GetDecalMaterial(name);
-		if (material.IsEmpty)
+		string? material = decalsystem.GetDecalMaterial(name);
+		if (material == null)
 			return 0;
 
 		lua.PushString(material);
@@ -866,6 +866,16 @@ public static partial class LuaUtil
 		}
 
 		return 0;
+	}
+
+	[LuaFunction]
+	static int RemoveDecalsAt(ILuaInterface lua) {
+		Vector3 pos = LuaVector.Get_Vector(1);
+		float radius = (float)lua.CheckNumber(2);
+		int count = (int)lua.CheckNumberOpt(3, 0);
+		bool permanent = lua.GetType(4) != LuaType.Nil && lua.GetBool(4);
+		lua.PushNumber(engine.GMOD_RemoveDecals(in pos, radius, count, permanent));
+		return 1;
 	}
 #endif
 

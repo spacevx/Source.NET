@@ -611,6 +611,43 @@ public partial class Render
 				DecalUnlink(decal, SourceDllMain.host_state.WorldBrush);
 		}
 	}
+
+	public static int DecalTermAtPos(in Vector3 position, float radius, int maxCount, bool permanent) {
+		float radiusSqr = radius * radius;
+		int count = 0;
+		for (int i = 0; i < g_MaxDecals; i++) {
+			Decal? decal = s_DecalPool[i];
+			if (decal == null)
+				continue;
+
+			if (!permanent && (decal.Flags & FDecal.Permanent) != 0)
+				continue;
+
+			float dx = decal.Position.X - position.X;
+			float dy = decal.Position.Y - position.Y;
+			float dz = decal.Position.Z - position.Z;
+			if ((dy * dy + dx * dx) + dz * dz > radiusSqr)
+				continue;
+
+			bool inDestroyList = false;
+			for (Decal? other = s_DecalDestroyList; other != null; other = other.DestroyList) {
+				if (other == decal) {
+					inDestroyList = true;
+					break;
+				}
+			}
+
+			if (!inDestroyList) {
+				DecalAddToDestroyList(decal);
+				++count;
+			}
+
+			if (maxCount > 0 && count >= maxCount)
+				break;
+		}
+
+		return count;
+	}
 #endif
 
 	public static void DecalTermAll() {
@@ -1222,12 +1259,12 @@ public partial class Render
 	static void DecalCreate(DecalInfo decalInfo, SurfaceHandle_t surfID, float x, float y, bool forceForDisplacement) {
 		Decal? decal;
 
-#if !GMOD_DLL
 		if (surfID == -1) {
 			ConMsg("psurface NULL in R_DecalCreate!\n");
 			return;
 		}
 
+#if !GMOD_DLL
 		Decal? old = DecalFindOverlappingDecals(decalInfo, surfID);
 		if (old != null) {
 			DecalUnlink(old, SourceDllMain.host_state.WorldBrush);

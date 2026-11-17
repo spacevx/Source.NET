@@ -71,6 +71,12 @@ public sealed class MaterialVar : IMaterialVar
 		}
 	}
 
+	static MaterialSystem? GetMaterialSystem(IMaterial? material) => material switch {
+		Material m => m.materials,
+		MaterialSubRect m => m.materials,
+		_ => null
+	};
+
 	MatCallQueue? GetCallQueue() => FakeMaterialVar ? null : materials?.GetRenderCallQueue();
 
 	MaterialVar? GetThreadedTempVar() {
@@ -96,14 +102,14 @@ public sealed class MaterialVar : IMaterialVar
 	public MaterialVar(IMaterial material, ReadOnlySpan<char> key) {
 		Init();
 		owningMaterial = (IMaterialInternal)material!;
-		materials = (material as Material)?.materials;
+		materials = GetMaterialSystem(material);
 		Name = new(GetSymbol(key));
 		Type = MaterialVarType.Undefined;
 	}
 	public MaterialVar(IMaterial material, ReadOnlySpan<char> key, int val) {
 		Init();
 		owningMaterial = (IMaterialInternal)material!;
-		materials = (material as Material)?.materials;
+		materials = GetMaterialSystem(material);
 		Name = new(GetSymbol(key));
 		Type = MaterialVarType.Int;
 		VecVal[0] = VecVal[1] = VecVal[2] = VecVal[3] = (float)val;
@@ -112,7 +118,7 @@ public sealed class MaterialVar : IMaterialVar
 	public MaterialVar(IMaterial material, ReadOnlySpan<char> key, float val) {
 		Init();
 		owningMaterial = (IMaterialInternal)material!;
-		materials = (material as Material)?.materials;
+		materials = GetMaterialSystem(material);
 		Name = new(GetSymbol(key));
 		Type = MaterialVarType.Float;
 		VecVal[0] = VecVal[1] = VecVal[2] = VecVal[3] = val;
@@ -121,7 +127,7 @@ public sealed class MaterialVar : IMaterialVar
 	public MaterialVar(IMaterial material, ReadOnlySpan<char> key, Span<float> val) {
 		Init();
 		owningMaterial = (IMaterialInternal)material!;
-		materials = (material as Material)?.materials;
+		materials = GetMaterialSystem(material);
 		Name = new(GetSymbol(key));
 		Type = MaterialVarType.Vector;
 		NumVectorComps = (byte)Math.Min(val.Length, 4);
@@ -130,10 +136,21 @@ public sealed class MaterialVar : IMaterialVar
 
 		IntVal = (int)VecVal[0];
 	}
+	public MaterialVar(IMaterial material, ReadOnlySpan<char> key, in Matrix4x4 matrix) {
+		Init();
+		owningMaterial = (IMaterialInternal)material!;
+		materials = GetMaterialSystem(material);
+		Name = new(GetSymbol(key));
+		Type = MaterialVarType.Matrix;
+		Matrix.Matrix = matrix;
+		Matrix.IsIdent = matrix.IsIdentity;
+		IntVal = 0;
+		VecVal = default;
+	}
 	public MaterialVar(IMaterial material, ReadOnlySpan<char> key, ReadOnlySpan<char> val) {
 		Init();
 		owningMaterial = (IMaterialInternal)material!;
-		materials = (material as Material)?.materials;
+		materials = GetMaterialSystem(material);
 		Name = new(GetSymbol(key));
 		StringVal = new(val);
 		Type = MaterialVarType.String;
@@ -190,7 +207,7 @@ public sealed class MaterialVar : IMaterialVar
 			if (!ITextureInternal.IsTextureInternalEnvCubemap(TextureValue))
 				retVal = TextureValue;
 			else
-				retVal = ((Material)owningMaterial).materials.GetRenderContext().GetLocalCubemap();
+				retVal = materials!.GetRenderContext().GetLocalCubemap();
 
 			if (retVal == null)
 				Warning("Invalid texture value in CMaterialVar::GetTextureValue\n");
@@ -198,7 +215,7 @@ public sealed class MaterialVar : IMaterialVar
 		else if (reallyAnnoyingLogCount++ < 20)
 			Warning($"Requesting texture value from var \"{GetName()}\" of type \"{Type}\" which is not a texture value (material: {(owningMaterial != null ? owningMaterial.GetName() : "NULL material")})\n");
 
-		retVal ??= ((Material)owningMaterial!).materials.GetErrorTexture();
+		retVal ??= materials!.GetErrorTexture();
 
 		return retVal;
 	}

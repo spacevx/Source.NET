@@ -480,6 +480,7 @@ public interface IEngineClient
 	void GMOD_DestroyDataTable(IGMODDataTable dataTable);
 	MDLHandle_t GMOD_LoadModel( ReadOnlySpan<char> path );
 	void GMOD_DecalRemoveEntity(int index);
+	int GMOD_RemoveDecals(in Vector3 position, float radius, int maxCount, bool permanent);
 	ReadOnlySpan<char> GMOD_TranslateAlias( ReadOnlySpan<char> cmd );
 	void GMOD_R_StudioInitLightingCache();
 	int PrecacheSentenceFile( ReadOnlySpan<char> fileName );

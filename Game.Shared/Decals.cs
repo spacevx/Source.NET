@@ -40,7 +40,7 @@ public interface IDecalEmitterSystem
 #if GMOD_DLL
 	void AddDecal(ReadOnlySpan<char> name, ReadOnlySpan<char> material);
 	void AddDecalEx(ReadOnlySpan<char> name, ReadOnlySpan<string> materials);
-	ReadOnlySpan<char> GetDecalMaterial(ReadOnlySpan<char> name);
+	string? GetDecalMaterial(ReadOnlySpan<char> name);
 #endif
 }
 
@@ -254,7 +254,7 @@ public class DecalEmitterSystem(ReadOnlySpan<char> name) : AutoGameSystem(name),
 		AllDecals.Add(decal);
 	}
 
-	public ReadOnlySpan<char> GetDecalMaterial(ReadOnlySpan<char> name) {
+	public string? GetDecalMaterial(ReadOnlySpan<char> name) {
 		DecalListEntry? item = PickDecal(name);
 		if (item == null)
 			return null;

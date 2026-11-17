@@ -286,7 +286,7 @@ public class ModelRender : IModelRender
 		StudioRender.DestroyDecalList(ModelInstances[modelInstance].DecalHandle);
 		// todo: g_ShadowMgr.RemoveAllShadowsFromModel(modelInstance)
 
-		// DestroyStaticPropColorData(modelInstance);
+		// todo: DestroyStaticPropColorData(modelInstance)
 		ModelInstances.Remove(modelInstance);
 	}
 
@@ -1198,6 +1198,9 @@ public class ModelRender : IModelRender
 
 		// todo: shadow pass (DrawStaticPropShadows)
 
+#if GMOD_DLL
+		Span<float> color = stackalloc float[3];
+#endif
 		for (int i = 0; i < DecalObjects.Count; i++) {
 			ref RObject obj = ref objectList[DecalObjects[i].ObjectIndex];
 			ref RModel model = ref modelList[obj.ModelIndex];
@@ -1212,6 +1215,10 @@ public class ModelRender : IModelRender
 			info.ClientEntity = obj.Renderable;
 			info.Lod = obj.Lod;
 			info.ColorMeshes = obj.ColorMeshes;
+#if GMOD_DLL
+			obj.Renderable!.GetColorModulation(color);
+			StudioRender.SetColorModulation(new Vector3(color[0], color[1], color[2]));
+#endif
 			StudioRender.DrawStaticPropDecals(ref info, in obj.Matrix);
 		}
 

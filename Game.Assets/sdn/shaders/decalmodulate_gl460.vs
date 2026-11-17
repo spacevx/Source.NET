@@ -63,7 +63,7 @@ void main()
 #if !MORPHING
     ApplyMorph(v_FlexPosition.xyz, v_FlexNormal, vPosition.xyz, vNormal);
 #else
-    // todo: v.vVertexID (POSITION2), the vertex ID stream is not ported
+    // note: the vertex ID is only read when DECAL is 0, DecalModulate always sets it to 1
     ApplyMorph(morphSampler, cMorphTargetTextureDim, cMorphSubrect, 0.0, v_TexCoord2.xyz, vPosition.xyz, vNormal);
 #endif
 

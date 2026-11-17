@@ -847,7 +847,7 @@ public class Material : IMaterialInternal
 	private static IMaterialVar? CreateVectorMaterialVarFromKeyValue(IMaterial material, KeyValues keyValue) {
 		ReadOnlySpan<char> name = GetVarName(keyValue);
 		Span<float> vecVal = stackalloc float[4];
-		int dimensions = ParseVectorFromKeyValueString(keyValue, name, vecVal);
+		int dimensions = ParseVectorFromKeyValueString(keyValue, material.GetName(), vecVal);
 		if (dimensions == 0)
 			return null;
 

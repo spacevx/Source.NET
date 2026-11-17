@@ -216,6 +216,10 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 
 	public void TraceRayAgainstStaticProp(in Ray ray, int staticPropIndex, ref Trace tr) {
 #if !SWDS
+#if GMOD_DLL
+		if (staticPropIndex < 0 || staticPropIndex >= StaticProps.Count)
+			return;
+#endif
 		StaticProp prop = StaticProps[staticPropIndex];
 
 		if (prop.GetSolid() != SolidType.None) {
@@ -231,7 +235,11 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 
 	public void AddDecalToStaticProp(in Vector3 rayStart, in Vector3 rayEnd, int staticPropIndex, int decalIndex, bool doTrace, ref Trace tr) {
 #if !SWDS
+#if GMOD_DLL
+		if (staticPropIndex < 0 || staticPropIndex >= StaticProps.Count) {
+#else
 		if (staticPropIndex >= StaticProps.Count) {
+#endif
 			tr = default;
 			tr.Fraction = 1.0f;
 			return;
@@ -262,10 +270,6 @@ public class StaticPropMgrImpl : IStaticPropMgrEngine, IStaticPropMgrClient, ISt
 		Vector3 up = new(0, 0, 1);
 		modelrender.AddDecal(prop.GetModelInstance(), in ray, in up, decalIndex, 0, noPokethru);
 #endif
-	}
-
-	public void AddColorDecalToStaticProp(Vector3 rayStart, Vector3 rayEnd, int staticPropIndex, int decalIndex, bool doTrace, Trace tr, bool useColor, Color color) {
-		throw new NotImplementedException();
 	}
 
 	public void AddShadowToStaticProp(ushort shadowHandle, IClientRenderable renderable) {
