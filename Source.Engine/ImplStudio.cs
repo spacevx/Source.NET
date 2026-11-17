@@ -286,8 +286,20 @@ public class ModelRender : IModelRender
 		StudioRender.DestroyDecalList(ModelInstances[modelInstance].DecalHandle);
 		// todo: g_ShadowMgr.RemoveAllShadowsFromModel(modelInstance)
 
-		// todo: DestroyStaticPropColorData(modelInstance)
+		DestroyStaticPropColorData(modelInstance);
 		ModelInstances.Remove(modelInstance);
+	}
+
+	void DestroyStaticPropColorData(ModelInstanceHandle_t handle) {
+#if !SWDS
+		if (handle == MODEL_INSTANCE_INVALID)
+			return;
+
+		if (ModelInstances[handle].ColorMeshHandle != 0) {
+			CacheRemove(ModelInstances[handle].ColorMeshHandle);
+			ModelInstances[handle].ColorMeshHandle = 0;
+		}
+#endif
 	}
 
 	public bool IsModelInstanceValid(ModelInstanceHandle_t handle) {
@@ -1517,6 +1529,11 @@ public class ModelRender : IModelRender
 		DataCacheHandle_t handle = CacheNextHandle++;
 		Cache[handle] = colorMeshData;
 		return handle;
+	}
+
+	private void CacheRemove(DataCacheHandle_t handle) {
+		if (Cache.Remove(handle, out ColorMeshData? colorMeshData))
+			colorMeshData.DestroyResource();
 	}
 
 	private void ProtectColorDataIfQueued(DataCacheHandle_t handle) {
