@@ -1320,9 +1320,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 	private unsafe void SetVertexShaderStateSkinningMatrices() {
 		GetMatrix(MaterialMatrixMode.Model, out Matrix4x4 modelMatrix);
-
-		Matrix4x4 transposed = Matrix4x4.Transpose(modelMatrix);
-		glNamedBufferSubData(uboBones, 0, sizeof(Matrix4x4), &transposed);
+		glNamedBufferSubData(uboBones, 0, sizeof(Matrix4x4), &modelMatrix);
 
 		MaxBoneLoaded = 0;
 	}
@@ -3046,7 +3044,7 @@ public class ShaderAPIGl46 : IShaderAPI, IShaderDevice, IDebugTextureInfo
 
 		if (boneIndex == 0) {
 			MatrixMode(MaterialMatrixMode.Model);
-			LoadMatrix(matrix);
+			LoadMatrix(transposed);
 		}
 	}
 

@@ -136,7 +136,6 @@ public class DecalModulate_dx9 : BaseVSShader
 				ShaderAPI.SetPixelShaderIndex(pshIndex.GetIndex());
 			}
 			else {
-				// todo: never reached, HasFastVertexTextures() is a constant false in GMod (Windows and macOS). When forced, decals on single-bone models do not draw (SKINNING with one bone)
 				// note: the vertex shader reads SHADER_SPECIFIC_CONST_10/11, Valve and GMod pass 6/7
 				SetHWMorphVertexShaderState((int)VertexShaderConst.ShaderSpecificConst6, (int)VertexShaderConst.ShaderSpecificConst7, VertexTextureSampler.Sampler0);
 
