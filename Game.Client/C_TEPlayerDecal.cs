@@ -41,17 +41,28 @@ public partial class C_TEPlayerDecal : C_BaseTempEntity
 
 public static partial class TempEnts
 {
+	static IMaterial? FindPlayerLogoMaterial(int playerIndex) {
+		Span<char> logoIndex = stackalloc char[11];
+		playerIndex.TryFormat(logoIndex, out int written, "D2");
+		return materials.FindMaterial($"decals/playerlogo{logoIndex[..written]}", MaterialDefines.TEXTURE_GROUP_DECAL, true);
+	}
+
 	public static IMaterial? CreateTempMaterialForPlayerLogo(int playerIndex, ref PlayerInfo info, Span<char> texName) {
+		if (gpGlobals.MaxClients <= 1 && info.CustomFiles[0] == 0) {
+			ConVarRef cl_logofile = new("cl_logofile");
+			ReadOnlySpan<char> logoFile = cl_logofile.GetString();
+			sprintf(texName, "%s").S(logoFile[Math.Min(10, logoFile.Length)..]);
+
+			IMaterial? spLogo = FindPlayerLogoMaterial(playerIndex);
+			if (spLogo != null && !spLogo.IsErrorMaterial())
+				return spLogo;
+		}
+
 		if (info.CustomFiles[0] == 0)
 			return null;
 
-		Span<char> logoIndex = stackalloc char[11];
-		playerIndex.TryFormat(logoIndex, out _, "D2");
-		Span<char> logoName = stackalloc char[64];
-		sprintf(logoName, "decals/playerlogo%s").S(logoIndex);
-
-		IMaterial logo = materials.FindMaterial(logoName.SliceNullTerminatedString(), MaterialDefines.TEXTURE_GROUP_DECAL);
-		if (logo.IsErrorMaterial())
+		IMaterial? logo = FindPlayerLogoMaterial(playerIndex);
+		if (logo == null || logo.IsErrorMaterial())
 			return null;
 
 		Span<char> logoHex = stackalloc char[16];
@@ -63,7 +74,7 @@ public static partial class TempEnts
 
 		if (!filesystem.FileExists(fullTexName.SliceNullTerminatedString())) {
 			Span<char> custName = stackalloc char[512];
-			sprintf(custName, "download/user_custom/%s%s/%s.dat").S(logoHex[..1]).S(logoHex[1..2]).S(logoHex);
+			sprintf(custName, "download/user_custom/%c%c/%s.dat").C(logoHex[0]).C(logoHex[1]).S(logoHex);
 			if (!filesystem.FileExists(custName.SliceNullTerminatedString()))
 				return null;
 
@@ -78,7 +89,7 @@ public static partial class TempEnts
 		if (C_TEPlayerDecal.cl_playerspraydisable.GetBool())
 			return;
 
-		C_BaseEntity? ent = cl_entitylist.GetEnt(entity);
+		C_BaseEntity? ent = cl_entitylist.GetBaseEntity(entity);
 		if (ent == null)
 			return;
 
@@ -89,12 +100,19 @@ public static partial class TempEnts
 		if (logo == null)
 			return;
 
-		ITexture texture = materials.FindTexture(texname.SliceNullTerminatedString(), MaterialDefines.TEXTURE_GROUP_DECAL);
-		if (ITexture.IsError(texture))
+		ITexture? texture = materials.FindTexture(texname.SliceNullTerminatedString(), MaterialDefines.TEXTURE_GROUP_DECAL, true);
+		if (texture == null || texture.IsError()) {
+			texture?.Download();
+			texture = materials.FindTexture(texname.SliceNullTerminatedString(), MaterialDefines.TEXTURE_GROUP_DECAL, true);
+			if (texture == null)
+				return;
+		}
+
+		if (texture.IsError() || (texture.GetFlags() & (int)TextureFlags.DepthRenderTarget) != 0)
 			return;
 
-		IMaterialVar? matVar = logo.FindVar("$basetexture", out bool found);
-		if (found && matVar != null) {
+		IMaterialVar? matVar = logo.FindVar("$basetexture", out bool found, true);
+		if (matVar != null && found) {
 			if (matVar.GetTextureValue() != texture) {
 				matVar.SetTextureValue(texture);
 				logo.RefreshPreservingMaterialVars();

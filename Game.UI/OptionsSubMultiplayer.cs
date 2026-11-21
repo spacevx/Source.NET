@@ -191,7 +191,7 @@ public class OptionsSubMultiplayer : PropertyPage
 		ConVarRef cl_logofile = new("cl_logofile");
 		ReadOnlySpan<char> value = "";
 		if (LogoName[0] != '\0')
-			value = $"materials/vgui/logos/{LogoName}.vtf";
+			value = $"materials/vgui/logos/{((ReadOnlySpan<char>)LogoName).SliceNullTerminatedString()}.vtf";
 		cl_logofile.SetValue(value);
 
 		if (DownloadFilterCombo != null) {

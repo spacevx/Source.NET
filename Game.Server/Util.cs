@@ -769,6 +769,14 @@ public static partial class Util
 		return direction;
 	}
 
+	public static void PlayerDecalTrace(ref Trace trace, int playernum) {
+		if (trace.Fraction == 1.0f)
+			return;
+
+		BroadcastRecipientFilter filter = new();
+		te.PlayerDecal(ref filter, 0.0f, in trace.EndPos, playernum, trace.Ent?.EntIndex() ?? 0);
+	}
+
 	public static void Remove(BaseEntity? entity) {
 		if (entity == null)
 			return;

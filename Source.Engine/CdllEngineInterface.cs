@@ -208,9 +208,7 @@ public class EngineClient(Cbuf Cbuf, Scr Scr, Con Con, Key Key, IGame game, Host
 		throw new NotImplementedException();
 	}
 
-	public bool CopyLocalFile(ReadOnlySpan<char> source, ReadOnlySpan<char> destination) {
-		throw new NotImplementedException();
-	}
+	public bool CopyLocalFile(ReadOnlySpan<char> source, ReadOnlySpan<char> destination) => Common.CopyFile(source, destination);
 
 	public void ServerCmd(ReadOnlySpan<char> szCmdString, bool bReliable = true) {
 		// info handling

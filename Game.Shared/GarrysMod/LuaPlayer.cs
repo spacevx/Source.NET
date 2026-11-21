@@ -6,6 +6,7 @@ using Game.Shared;
 
 using Source.Common.Commands;
 using Source.Common.GarrysMod.Lua;
+using Source.Common.Formats.BSP;
 using Source.Common.Mathematics;
 
 using System.Numerics;
@@ -643,6 +644,23 @@ public static partial class LuaPlayer
 	}
 
 #if GAME_DLL
+	[LuaMethod]
+	static int Player__SprayDecal(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+		Vector3 start = LuaVector.Get_Vector(2);
+		Vector3 end = LuaVector.Get_Vector(3);
+		Util.TraceLine(start, end, Mask.SolidBrushOnly, player, CollisionGroup.None, out Trace tr);
+		Util.PlayerDecalTrace(ref tr, player.EntIndex());
+		return 0;
+	}
+
+	[LuaMethod]
+	static int Player__AllowImmediateDecalPainting(ILuaInterface lua) {
+		BasePlayer player = Get_Player(1, false)!;
+		player.AllowImmediateDecalPainting();
+		return 0;
+	}
+
 	[LuaMethod]
 	static int Player__RemoveAllAmmo(ILuaInterface lua) {
 		BasePlayer player = Get_Player(1, false)!;

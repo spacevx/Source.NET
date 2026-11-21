@@ -206,7 +206,16 @@ public class GameClient : BaseClient
 
 	// bool ProcessSaveReplay(CLC_SaveReplay pMsg) { } // seems to be removed?
 
-	void DownloadCustomizations() { }
+	void DownloadCustomizations() {
+		for (int i = 0; i < Constants.MAX_CUSTOM_FILES; i++) {
+			if (CustomFiles[i].CRC == 0)
+				continue;
+
+			string hexname = CustomFilename.Get(CustomFiles[i].CRC);
+			if (!g_pFileSystem.FileExists(hexname, "MOD"))
+				CustomFiles[i].ReqID = NetChannel.RequestFile(RequestFile.UserData, CustomFiles[i].CRC);
+		}
+	}
 
 	public override void Connect(ReadOnlySpan<char> name, int userID, INetChannel netChannel, bool fakePlayer, int clientChallenge) {
 		base.Connect(name, userID, netChannel, fakePlayer, clientChallenge);
@@ -349,6 +358,7 @@ public class GameClient : BaseClient
 		base.Clear();
 
 		FrameManager.DeleteClientFrames(-1);
+		FilesSent = 0;
 
 		Sounds.Clear();
 		VoiceStreams.ClearAll();
@@ -698,25 +708,67 @@ public class GameClient : BaseClient
 		return base.ShouldSendMessages();
 	}
 
-	// void FileReceived(ReadOnlySpan<char> fileName, uint transferID) { }
+	public short FilesSent;
 
-	public override void FileRequested(RequestFile type, uint value, uint transferID) {
-		DevMsg($"File request (type {type}, value {value}) from client {NetChannel.GetAddress()}.\n");
-		// TODO: User data for I think sprays?
-		if (sv_allowdownload.GetBool() && type == RequestFile.Downloadable && sv.DownloadableFileTable is INetworkStringTable table && value < (uint)table.GetNumStrings()) {
-			ReadOnlySpan<char> name = table.GetString((int)value);
-			if (!name.IsStringEmpty) {
-				NetChannel.SendFile(name, transferID);
+	public override void FileReceived(ReadOnlySpan<char> fileName, uint transferID) {
+		for (int i = 0; i < Constants.MAX_CUSTOM_FILES; i++) {
+			if (CustomFiles[i].ReqID == transferID) {
+				FilesDownloaded++;
+				Server.UserInfoChanged(ClientSlot);
 				return;
 			}
 		}
 
-		NetChannel.DenyFile(transferID);
+		Msg($"CGameClient::FileReceived: {fileName} not wanted.\n");
 	}
 
-	// void FileDenied(ReadOnlySpan<char> fileName, uint transferID) { }
+	public override void FileRequested(RequestFile type, uint value, uint transferID) {
+		if (!sv_allowdownload.GetBool()) {
+			NetChannel.DenyFile(transferID);
+			return;
+		}
 
-	// void FileSent(ReadOnlySpan<char> fileName, uint transferID) { }
+		string name;
+		if (type == RequestFile.UserData)
+			name = CustomFilename.Get(value);
+		else if (type == RequestFile.Downloadable) {
+			INetworkStringTable? table = sv.DownloadableFileTable;
+			name = table != null && value < (uint)table.GetNumStrings() ? new(table.GetString((int)value)) : "";
+		}
+		else {
+			NetChannel.DenyFile(transferID);
+			return;
+		}
+
+		if (IsActive()) {
+			if (FilesSent >= 33) {
+				NetChannel.DenyFile(transferID);
+				return;
+			}
+			FilesSent++;
+		}
+
+		if (NetChannel.SendFile(name, transferID))
+			DevMsg($"Sending file '{name}' to client {GetClientName()}.\n");
+	}
+
+	public override void FileDenied(uint transferID) {
+		DevMsg($"CGameClient::FileDenied: TransferID = {transferID}\n");
+	}
+
+	public override void FileSent(ReadOnlySpan<char> fileName, uint transferID) {
+		ConMsg($"Sent file '{fileName}' to client {GetClientName()}.\n");
+	}
+
+	public override bool ShouldAcceptFile(ReadOnlySpan<char> fileName, uint transferID) {
+		for (int i = 0; i < Constants.MAX_CUSTOM_FILES; i++) {
+			if (CustomFiles[i].ReqID == transferID && stricmp(CustomFilename.Get(CustomFiles[i].CRC), fileName) == 0)
+				return true;
+		}
+
+		DevMsg($"CGameClient::ShouldAcceptFile - discarding file '{fileName}'\n");
+		return false;
+	}
 
 	readonly Host Host = Singleton<Host>();
 

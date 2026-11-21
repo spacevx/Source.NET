@@ -69,6 +69,7 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 	public virtual void FileReceived(ReadOnlySpan<char> fileName, uint transferID) { }
 	public virtual void FileDenied(uint transferID) { }
 	public virtual void FileSent(ReadOnlySpan<char> fileName, uint transferID) { }
+	public virtual bool ShouldAcceptFile(ReadOnlySpan<char> fileName, uint transferID) => true;
 
 	public bool ProcessMessage<T>(T message) where T : INetMessage {
 		// if (message is not NET_Tick && message is not CLC_Move)
@@ -799,7 +800,6 @@ public abstract class BaseClient : IGameEventListener2, IClient, IClientMessageH
 		userInfo.UserID = GetUserID();
 		userInfo.FakePlayer = IsFakeClient();
 		userInfo.IsHLTV = IsHLTV();
-		userInfo.IsReplay = IsReplay();
 		for (int i = 0; i < Constants.MAX_CUSTOM_FILES; i++)
 			userInfo.CustomFiles[i] = (CRC32_t)CustomFiles[i].CRC;
 		userInfo.FilesDownloaded = (byte)FilesDownloaded;

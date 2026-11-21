@@ -1037,7 +1037,10 @@ public partial class BasePlayer : BaseCombatCharacter
 							break;
 					}
 #endif
-					// todo
+					NextDecalTime = gpGlobals.CurTime + decalfrequency.GetFloat();
+					SprayCan can = new();
+					can.PostConstructor("spraycan");
+					can.Spawn(this);
 				}
 
 				break;
@@ -1049,6 +1052,8 @@ public partial class BasePlayer : BaseCombatCharacter
 
 		Impulse = 0;
 	}
+
+	public void AllowImmediateDecalPainting() => NextDecalTime = gpGlobals.CurTime;
 
 	public virtual void InitialSpawn() {
 		Connected = PlayerConnectedState.Connected;

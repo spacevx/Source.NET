@@ -300,6 +300,7 @@ public abstract class BaseClientState(
 	public abstract void FileReceived(ReadOnlySpan<char> fileName, uint transferID);
 	public abstract void FileDenied(uint transferID);
 	public abstract void FileSent(ReadOnlySpan<char> fileName, uint transferID);
+	public virtual bool ShouldAcceptFile(ReadOnlySpan<char> fileName, uint transferID) => true;
 
 	// todo: determine if using explicit generics like this
 	// makes it more efficient (ie. JIT collapses paths for each type?)

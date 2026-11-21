@@ -486,6 +486,21 @@ public static class StrTools
 				str[i] = char.ToUpper(str[i]);
 	}
 
+	public static bool ExtractFilePath(ReadOnlySpan<char> path, Span<char> dest) {
+		if (dest.Length < 1)
+			return false;
+
+		path = path.SliceNullTerminatedString();
+		int src = path.Length > 0 ? path.Length - 1 : 0;
+		while (src != 0 && !IsPathSeparator(path[src - 1]))
+			src--;
+
+		int copySize = Math.Min(src, dest.Length - 1);
+		path[..copySize].CopyTo(dest);
+		dest[copySize] = '\0';
+		return copySize != 0;
+	}
+
 	public static void StripFilename(Span<char> path) {
 		int length = (int)(strlen(path) - 1);
 		if (length <= 0)

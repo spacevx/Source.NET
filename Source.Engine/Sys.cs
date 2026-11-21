@@ -20,6 +20,24 @@ namespace Source.Engine;
 public static class SysGlobals
 {
 	public static bool InEditMode() => false;
+
+	public static void Sys_mkdir(ReadOnlySpan<char> path) {
+		Span<char> testPath = stackalloc char[MAX_PATH];
+		strcpy(testPath, path);
+		int len = (int)strlen(testPath);
+		if (len > 0 && (testPath[len - 1] == '\\' || testPath[len - 1] == '/'))
+			testPath[len - 1] = '\0';
+
+		ReadOnlySpan<char> testPathStr = ((ReadOnlySpan<char>)testPath).SliceNullTerminatedString();
+		ReadOnlySpan<char> pathID = "MOD";
+		if (testPathStr.Length >= 2 && (testPathStr[0] == '\\' || testPathStr[0] == '/') && (testPathStr[1] == '\\' || testPathStr[1] == '/'))
+			pathID = null;
+
+		if (g_pFileSystem.FileExists(testPathStr, pathID) && !g_pFileSystem.IsDirectory(testPathStr, pathID))
+			g_pFileSystem.RemoveFile(testPathStr, pathID);
+
+		g_pFileSystem.CreateDirHierarchy(path, pathID);
+	}
 }
 
 // Kind of custom here, we can figure out what to properly do here later.

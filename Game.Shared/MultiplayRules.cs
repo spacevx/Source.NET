@@ -186,7 +186,7 @@ GameRules
 				if (!engine.GetPlayerInfo(iPlayerIndex, out pi))
 					continue;
 #if REPLAY_ENABLED
-				if ( pi.IsHLTV || pi.IsReplay || pi.FakePlayer )
+				if ( pi.IsHLTV || pi.FakePlayer )
 #else
 				if (pi.IsHLTV || pi.FakePlayer)
 #endif

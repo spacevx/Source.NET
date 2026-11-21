@@ -10,6 +10,7 @@ using Source.Common;
 using Source.Common.Compression;
 using Source.Common.Engine;
 using Source.Common.Filesystem;
+using Source.Common.Hashing;
 
 using System;
 using System.Buffers;
@@ -241,27 +242,57 @@ public class Common(IServiceProvider providers, Sys Sys)
 	}
 
 	public static bool CopyFile(ReadOnlySpan<char> sourcePath, ReadOnlySpan<char> destPath) {
-		const int bufferSize = 4096 * 32;
-
 		using IFileHandle? input = g_pFileSystem.Open(sourcePath, FileOpenOptions.Read | FileOpenOptions.Binary);
-		AssertMsg(input != null, $"COM_CopyFile(): Input file '{sourcePath}' failed to open");
 		if (input == null)
 			return false;
 
-		CreatePath(destPath);
+		Span<char> dir = stackalloc char[1024];
+		strcpy(dir, destPath);
+		StrTools.StripFilename(dir);
+		SysGlobals.Sys_mkdir(((ReadOnlySpan<char>)dir).SliceNullTerminatedString());
 
-		using IFileHandle? output = g_pFileSystem.Open(destPath, FileOpenOptions.Write | FileOpenOptions.Binary);
-		AssertMsg(output != null, $"COM_CopyFile(): Output file '{destPath}' failed to open");
+		using IFileHandle? output = g_pFileSystem.Open(destPath, FileOpenOptions.Write | FileOpenOptions.Binary, "MOD");
 		if (output == null)
 			return false;
 
-		byte[] buf = new byte[bufferSize];
+		byte[] buf = new byte[4096];
 		long remaining = input.Stream.Length;
 		while (remaining > 0) {
-			int count = remaining < bufferSize ? (int)remaining : bufferSize;
-			int read = input.Stream.Read(buf, 0, count);
-			output.Stream.Write(buf, 0, read);
-			remaining -= read;
+			int count = remaining < buf.Length ? (int)remaining : buf.Length;
+			input.Stream.ReadAtLeast(buf.AsSpan(0, count), count, false);
+			output.Stream.Write(buf, 0, count);
+			remaining -= count;
+		}
+
+		return true;
+	}
+
+	public static int OpenFile(ReadOnlySpan<char> filename, out IFileHandle? file) {
+		file = g_pFileSystem.Open(filename, FileOpenOptions.Read | FileOpenOptions.Binary);
+		return file != null ? (int)file.Stream.Length : -1;
+	}
+
+	public static bool CRC_File(out CRC32_t crcValue, ReadOnlySpan<char> fileName) {
+		crcValue = CRC32.CRC32_INIT_VALUE;
+
+		int size = OpenFile(fileName, out IFileHandle? fp);
+		if (size == -1 || fp == null)
+			return false;
+
+		using (fp) {
+			Span<byte> chunk = stackalloc byte[1024];
+			while (size > 0) {
+				int bytesRead = fp.Stream.Read(chunk[..Math.Min(size, 1024)]);
+				if (bytesRead > 0) {
+					size -= bytesRead;
+					CRC32.ProcessBuffer(ref crcValue, (ReadOnlySpan<byte>)chunk[..bytesRead]);
+				}
+
+				if (fp.Stream.Position >= fp.Stream.Length)
+					return true;
+				else if (bytesRead <= 0)
+					return false;
+			}
 		}
 
 		return true;

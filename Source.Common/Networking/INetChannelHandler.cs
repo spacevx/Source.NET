@@ -11,6 +11,7 @@ public interface INetChannelHandler
 	void FileReceived(ReadOnlySpan<char> fileName, uint transferID);
 	void FileDenied(uint transferID);
 	void FileSent(ReadOnlySpan<char> fileName, uint transferID);
+	bool ShouldAcceptFile(ReadOnlySpan<char> fileName, uint transferID);
 
 	bool ProcessMessage<T>(T message) where T : INetMessage;
 }

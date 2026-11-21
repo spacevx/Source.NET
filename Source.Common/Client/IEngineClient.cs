@@ -23,16 +23,15 @@ namespace Source.Common.Client;
 /// </summary>
 public struct PlayerInfo
 {
-	public const int SIZEOF = 228;
+	public const int SIZEOF = 324;
 
 	public InlineArray128<char> Name;
 	public int UserID;
 	public InlineArray33<byte> GUID;
 	public uint FriendsID;
-	public InlineArray32<char> FriendsName;
+	public InlineArray128<char> FriendsName;
 	public bool FakePlayer;
 	public bool IsHLTV;
-	public bool IsReplay;
 	public InlineArray4<CRC32_t> CustomFiles;
 	public byte FilesDownloaded;
 
@@ -54,18 +53,17 @@ public struct PlayerInfo
 		bytes[132..165].CopyTo(info.GUID);
 		info.FriendsID = MemoryMarshal.Cast<byte, uint>(bytes[168..172])[0];
 
-		ReadOnlySpan<byte> friendsName = bytes[172..204];
+		ReadOnlySpan<byte> friendsName = bytes[172..300];
 		int friendsNull = friendsName.IndexOf<byte>(0);
 		if (friendsNull != -1)
 			friendsName = friendsName[..];
 		Encoding.ASCII.GetChars(friendsName, info.FriendsName);
 
-		info.FakePlayer = bytes[204] != 0;
-		info.IsHLTV = bytes[205] != 0;
-		info.IsReplay = bytes[206] != 0;
+		info.FakePlayer = bytes[300] != 0;
+		info.IsHLTV = bytes[301] != 0;
 
-		MemoryMarshal.Cast<byte, CRC32_t>(bytes[208..(208 + 16)]).CopyTo(info.CustomFiles);
-		info.FilesDownloaded = bytes[224];
+		MemoryMarshal.Cast<byte, CRC32_t>(bytes[304..(304 + 16)]).CopyTo(info.CustomFiles);
+		info.FilesDownloaded = bytes[320];
 		return true;
 	}
 
@@ -80,14 +78,13 @@ public struct PlayerInfo
 		MemoryMarshal.Write(bytes[168..172], in FriendsID);
 
 		ReadOnlySpan<char> friendsName = ((ReadOnlySpan<char>)FriendsName).SliceNullTerminatedString();
-		Encoding.ASCII.GetBytes(friendsName[..Math.Min(friendsName.Length, 31)], bytes[172..204]);
+		Encoding.ASCII.GetBytes(friendsName[..Math.Min(friendsName.Length, 127)], bytes[172..300]);
 
-		bytes[204] = (byte)(FakePlayer ? 1 : 0);
-		bytes[205] = (byte)(IsHLTV ? 1 : 0);
-		bytes[206] = (byte)(IsReplay ? 1 : 0);
+		bytes[300] = (byte)(FakePlayer ? 1 : 0);
+		bytes[301] = (byte)(IsHLTV ? 1 : 0);
 
-		MemoryMarshal.Cast<CRC32_t, byte>((ReadOnlySpan<CRC32_t>)CustomFiles).CopyTo(bytes[208..224]);
-		bytes[224] = FilesDownloaded;
+		MemoryMarshal.Cast<CRC32_t, byte>((ReadOnlySpan<CRC32_t>)CustomFiles).CopyTo(bytes[304..320]);
+		bytes[320] = FilesDownloaded;
 	}
 }
 

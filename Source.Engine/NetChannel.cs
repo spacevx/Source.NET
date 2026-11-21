@@ -752,49 +752,52 @@ public class NetChannel : INetChannelInfo, INetChannel
 		return true;
 	}
 
-	public void HandleUpload(DataFragments data, INetChannelHandler handler) {
-		string? errorStr = null;
+	static ConVar? s_pAllowUpload;
 
-		ConVar? allowUpload = cvar.FindVar("sv_allowupload");
-		if (allowUpload != null && !allowUpload.GetBool()) {
-			errorStr = "ignored. File uploads are disabled!";
-		}
-		else if (data.Filename == null || !IsValidFileForTransfer(data.Filename)) {
-			errorStr = "has invalid path or extension!";
-		}
-		else {
-			const string pathID = "download";
+	public void HandleUpload(DataFragments data, INetChannelHandler? handler) {
+		s_pAllowUpload ??= cvar.FindVar("sv_allowupload");
 
-			if (g_pFileSystem.FileExists(data.Filename, pathID)) {
-				errorStr = "already exists!";
+		string errorStr = "ignored. File uploads are disabled!";
+		if (s_pAllowUpload != null && s_pAllowUpload.GetBool()) {
+			if (data.Filename == null || !IsValidFileForTransfer(data.Filename))
+				errorStr = "has invalid path or extension!";
+			else if (handler != null && !handler.ShouldAcceptFile(data.Filename, data.TransferID)) {
+				DevMsg($"Download file '{data.Filename}' unwanted file!\n");
+				handler.FileDenied(data.TransferID);
+				return;
 			}
 			else {
-				ReadOnlySpan<char> filename = data.Filename;
-				int lastSlash = filename.LastIndexOfAny('/', '\\');
-				if (lastSlash > 0)
-					g_pFileSystem.CreateDirHierarchy(filename[..lastSlash], pathID);
+				const string pathID = "download";
 
-				data.File = g_pFileSystem.Open(data.Filename, Filesystem.FileOpenOptions.Write | Filesystem.FileOpenOptions.Binary, pathID);
-
-				if (data.File == null) {
-					errorStr = "failed to write!";
-				}
+				if (g_pFileSystem.FileExists(data.Filename, pathID))
+					errorStr = "already exists!";
 				else {
-					if (data.Buffer != null)
-						data.File.Stream.Write(data.Buffer, 0, (int)data.Bytes);
-					data.File.Dispose();
-					data.File = null;
+					Span<char> path = stackalloc char[MAX_PATH];
+					if (!StrTools.ExtractFilePath(data.Filename, path))
+						path[0] = '\0';
+					g_pFileSystem.CreateDirHierarchy(((ReadOnlySpan<char>)path).SliceNullTerminatedString(), pathID);
 
-					if (Net.net_showfragments.GetInt() == 2)
-						DevMsg($"FileReceived: {data.Filename}, {data.Bytes} bytes (ID {data.TransferID})\n");
+					data.File = g_pFileSystem.Open(data.Filename, Filesystem.FileOpenOptions.Write | Filesystem.FileOpenOptions.Binary, pathID);
+					if (data.File == null)
+						errorStr = "failed to write!";
+					else {
+						if (data.Buffer != null)
+							data.File.Stream.Write(data.Buffer, 0, (int)data.Bytes);
+						data.File.Dispose();
+						data.File = null;
 
-					handler.FileReceived(data.Filename, data.TransferID);
+						if (Net.net_showfragments.GetInt() == 2)
+							DevMsg($"FileReceived: {data.Filename}, {data.Bytes} bytes (ID {data.TransferID})\n");
+
+						handler?.FileReceived(data.Filename, data.TransferID);
+						return;
+					}
 				}
 			}
 		}
 
-		if (errorStr != null)
-			Msg($"Download file '{data.Filename}' {errorStr}\n");
+		DevMsg($"Download file '{data.Filename}' {errorStr}\n");
+		handler?.FileDenied(data.TransferID);
 	}
 
 	public void UncompressFragments(DataFragments data) {
@@ -1158,8 +1161,8 @@ public class NetChannel : INetChannelInfo, INetChannel
 
 					byte[] uncompressedArray = ArrayPool<byte>.Shared.Rent((int)uncompressedSize);
 					byte[] compressedArray = ArrayPool<byte>.Shared.Rent((int)compressedSize);
-					Span<byte> uncompressed = uncompressedArray.AsSpan();
-					Span<byte> compressed = compressedArray.AsSpan();
+					Span<byte> uncompressed = uncompressedArray.AsSpan(0, (int)uncompressedSize);
+					Span<byte> compressed = compressedArray.AsSpan(0, (int)compressedSize);
 
 					// read in source file
 					data.File!.Stream.ReadExactly(uncompressed);
@@ -1170,7 +1173,7 @@ public class NetChannel : INetChannelInfo, INetChannel
 						hZipFile = g_pFileSystem.Open(compressedfilename, FileOpenOptions.Write | FileOpenOptions.Binary, null);
 
 						if (hZipFile != null) {
-							DevMsg("Creating compressed version of file %s (%d -> %d)\n", data.Filename, data.Bytes, compressedSize);
+							DevMsg($"Creating compressed version of file {data.Filename} ({data.Bytes} -> {compressed.Length})\n");
 							hZipFile.Stream.Write(compressed);
 							hZipFile.Stream.Dispose();
 
@@ -1179,7 +1182,7 @@ public class NetChannel : INetChannelInfo, INetChannel
 
 							if (hZipFile != null) {
 								// ok, now everything if fine
-								compressedFileSize = compressedSize;
+								compressedFileSize = compressed.Length;
 							}
 						}
 					}
@@ -2025,24 +2028,18 @@ public class NetChannel : INetChannelInfo, INetChannel
 		if (RemoteAddress!.Type == NetAddressType.Null)
 			return true;
 
-		if (filename.IsEmpty || filename[0] == '\0')
+		filename = filename.SliceNullTerminatedString();
+		if (filename.IsEmpty)
 			return false;
 
 		ReadOnlySpan<char> sendfile = filename;
-		while (sendfile[0] != '\0' && sendfile[0].IsPathSeparator())
+		while (!sendfile.IsEmpty && (sendfile[0] == ' ' || sendfile[0] == '/' || sendfile[0] == '\\'))
 			sendfile = sendfile[1..];
 
-		// Don't transfer exe, vbs, com, bat-type files.
-		if (!IsValidFileForTransfer(sendfile))
-			return false;
-
-		if (!CreateFragmentsFromFile(sendfile, FragmentStream.File, transferID)) {
-			DenyFile(transferID); // send host a deny message
+		if (!IsValidFileForTransfer(sendfile) || !CreateFragmentsFromFile(sendfile, FragmentStream.File, transferID)) {
+			DenyFile(transferID);
 			return false;
 		}
-
-		if (Net.net_showfragments.GetInt() == 2)
-			DevMsg($"SendFile: {sendfile} (ID {transferID})\n");
 
 		return true;
 	}
@@ -2066,7 +2063,7 @@ public class NetChannel : INetChannelInfo, INetChannel
 	public bool CreateFragmentsFromFile(ReadOnlySpan<char> filename, FragmentStream stream, uint transferID) {
 		filename = filename.SliceNullTerminatedString();
 		if (IsFileInWaitingList(filename))
-			return true; // already scheduled for upload
+			return false;
 
 		ReadOnlySpan<char> pathID = "GAME";
 

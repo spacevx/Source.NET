@@ -258,6 +258,7 @@ IModelLoader modelloader, ICommandLine commandLine,
 				return true;
 			case Protocol.USER_INFO_TABLENAME:
 				UserInfoTable = table;
+				table.SetStringChangedCallback(null, Callback_UserInfoChanged);
 				return true;
 			case Protocol.DOWNLOADABLE_FILE_TABLENAME:
 				DownloadableFileTable = table;
@@ -701,8 +702,21 @@ IModelLoader modelloader, ICommandLine commandLine,
 		g_ClientDLL?.FileReceived(fileName, transferID);
 	}
 	public override void FileRequested(RequestFile type, uint value, uint transferID) {
-		// todo
-		NetChannel!.DenyFile(transferID);
+		if (type != RequestFile.UserData) {
+			DevMsg($"CClientState::FileRequested: Type != CUSTOMFILE (Type = {(int)type}, TransferID = {transferID})\n");
+			NetChannel!.DenyFile(transferID);
+			return;
+		}
+
+		if (!cl_allowupload.GetBool()) {
+			DevMsg($"CClientState::FileRequested: cl_allowupload = 0 (TransferID = {transferID})\n");
+			NetChannel!.DenyFile(transferID);
+			return;
+		}
+
+		string filehex = CustomFilename.Get(value);
+		DevMsg($"CClientState::FileRequested: Sending '{filehex}' (TransferID = {transferID})\n");
+		NetChannel!.SendFile(filehex, transferID);
 	}
 	public override void FileDenied(uint transferID) {
 		CL.FileDenied(transferID);
@@ -898,9 +912,101 @@ IModelLoader modelloader, ICommandLine commandLine,
 		info.FriendsID = SteamUser.GetSteamID().m_SteamID;
 		info.FriendsName = "";
 
-		// check stuff later
+		CheckOwnCustomFiles();
+		for (int i = 0; i < MAX_CUSTOM_FILES; i++)
+			info.CustomFiles[i] = CustomFiles[i].CRC;
 
 		NetChannel!.SendNetMsg(info);
+	}
+
+	public void CheckOthersCustomFile(CRC32_t crcValue) {
+		if (crcValue == 0)
+			return;
+
+		if (!cl_allowdownload.GetBool())
+			return;
+
+		string filehex = CustomFilename.Get(crcValue);
+		if (fileSystem.FileExists(filehex, "MOD"))
+			return;
+
+		NetChannel!.RequestFile(RequestFile.UserData, crcValue);
+	}
+
+	public void AddCustomFile(int slot, ReadOnlySpan<char> resourceFile) {
+		resourceFile = resourceFile.SliceNullTerminatedString();
+		if (resourceFile.Length <= 0)
+			return;
+
+		if (!Common.IsValidPath(resourceFile)) {
+			Msg($"Customization file '{resourceFile}' has invalid path.\n");
+			return;
+		}
+
+		if (resourceFile.Length < 4 || stricmp(resourceFile[^4..], ".vtf") != 0 || strnicmp(resourceFile, "materials/vgui/logos/", 21) != 0) {
+			Warning($"Customization file '{resourceFile}' has invalid path.\n");
+			return;
+		}
+
+		if ((uint)slot >= MAX_CUSTOM_FILES)
+			return;
+
+		if (!fileSystem.FileExists(resourceFile)) {
+			DevMsg($"Couldn't find customization file '{resourceFile}'.\n");
+			return;
+		}
+
+		if (fileSystem.Size(resourceFile) > Constants.MAX_CUSTOM_FILE_SIZE) {
+			Msg($"Customization file '{resourceFile}' is too big ( >{Constants.MAX_CUSTOM_FILE_SIZE} bytes).\n");
+			return;
+		}
+
+		Common.CRC_File(out CRC32_t crcValue, resourceFile);
+
+		string filehex = CustomFilename.Get(crcValue);
+		Span<char> absFilename = stackalloc char[MAX_PATH];
+		bool copy = true;
+		if (!fileSystem.RelativePathToFullPath(filehex, "MOD", absFilename, PathTypeFilter.CullPack).IsEmpty) {
+			Common.CRC_File(out CRC32_t test, ((ReadOnlySpan<char>)absFilename).SliceNullTerminatedString());
+			if (test == crcValue)
+				copy = false;
+		}
+
+		if (copy) {
+			byte[]? buf = null;
+			using (IFileHandle? input = fileSystem.Open(resourceFile, FileOpenOptions.Read | FileOpenOptions.Binary, "game")) {
+				if (input != null) {
+					buf = new byte[input.Stream.Length];
+					input.Stream.ReadExactly(buf);
+				}
+			}
+
+			if (buf == null) {
+				Warning($"CacheCustomFiles: can't read '{resourceFile}'.\n");
+				return;
+			}
+
+			Span<char> parentDir = stackalloc char[MAX_PATH];
+			StrTools.ExtractFilePath(filehex, parentDir);
+			fileSystem.CreateDirHierarchy(((ReadOnlySpan<char>)parentDir).SliceNullTerminatedString(), "download");
+
+			if (!fileSystem.WriteFile(filehex, "download", buf)) {
+				Warning($"CacheCustomFiles: can't write '{filehex}'.\n");
+				return;
+			}
+		}
+
+		CustomFiles[slot].CRC = crcValue;
+		CustomFiles[slot].ReqID = 0;
+	}
+
+	public void CheckOwnCustomFiles() {
+		Array.Clear(CustomFiles);
+
+		if (MaxClients == 1)
+			return;
+
+		AddCustomFile(0, cl_logofile.GetString());
 	}
 
 	public void FinishSignonState_New() {
@@ -1036,6 +1142,27 @@ IModelLoader modelloader, ICommandLine commandLine,
 		p.SetModel(model);
 		return model;
 	}
+	public void Callback_UserInfoChanged(object? context, INetworkStringTable stringTable, int stringNumber, ReadOnlySpan<char> newString, ReadOnlySpan<byte> newData) {
+		Assert(stringTable == UserInfoTable);
+
+		if (!PlayerInfo.FromBytes(newData, out PlayerInfo player))
+			return;
+
+		for (int i = 0; i < MAX_CUSTOM_FILES; i++)
+			CheckOthersCustomFile(player.CustomFiles[i]);
+
+		IGameEvent? ev = g_GameEventManager.CreateEvent("player_info");
+		if (ev != null) {
+			ev.SetInt("userid", player.UserID);
+			ev.SetInt("friendsid", (int)player.FriendsID);
+			ev.SetInt("index", stringNumber);
+			ev.SetString("name", ((ReadOnlySpan<char>)player.Name).SliceNullTerminatedString());
+			ev.SetString("networkid", Encoding.ASCII.GetString((ReadOnlySpan<byte>)player.GUID).Split('\0')[0]);
+			ev.SetBool("bot", player.FakePlayer);
+			g_GameEventManager.FireEventClientSide(ev);
+		}
+	}
+
 	public void Callback_DecalChanged(object? context, INetworkStringTable stringTable, int stringNumber, ReadOnlySpan<char> newString, ReadOnlySpan<byte> newData) {
 		if (stringTable == DecalPrecacheTable)
 			SetDecal(stringNumber);
